@@ -7,6 +7,7 @@ from domain.novel.value_objects.novel_id import NovelId
 from domain.novel.value_objects.chapter_id import ChapterId
 from domain.novel.value_objects.word_count import WordCount
 from domain.novel.value_objects.chapter_content import ChapterContent
+from domain.shared.exceptions import EntityNotFoundError
 from application.services.novel_service import NovelService
 from application.dtos.novel_dto import NovelDTO
 
@@ -136,3 +137,71 @@ class TestNovelService:
                 title="第一章",
                 content="章节内容"
             )
+
+    def test_update_novel_stage(self, service, mock_repository):
+        """测试更新小说阶段"""
+        # 准备 mock 数据
+        novel = Novel(
+            id=NovelId("test-novel"),
+            title="测试小说",
+            author="测试作者",
+            target_chapters=10,
+            stage=NovelStage.PLANNING
+        )
+        mock_repository.get_by_id.return_value = novel
+
+        novel_dto = service.update_novel_stage("test-novel", "writing")
+
+        assert novel_dto.stage == "writing"
+
+        # 验证调用了 save
+        mock_repository.save.assert_called_once()
+
+    def test_update_novel_stage_not_found(self, service, mock_repository):
+        """测试更新不存在的小说阶段"""
+        mock_repository.get_by_id.return_value = None
+
+        with pytest.raises(EntityNotFoundError, match="Novel"):
+            service.update_novel_stage("nonexistent", "writing")
+
+    def test_get_novel_statistics(self, service, mock_repository):
+        """测试获取小说统计信息"""
+        # 准备 mock 数据
+        novel = Novel(
+            id=NovelId("test-novel"),
+            title="测试小说",
+            author="测试作者",
+            target_chapters=10,
+            stage=NovelStage.WRITING
+        )
+        # 添加章节
+        chapter1 = Chapter(
+            id="chapter-1",
+            novel_id=NovelId("test-novel"),
+            number=1,
+            title="第一章",
+            content="这是第一章的内容"
+        )
+        chapter2 = Chapter(
+            id="chapter-2",
+            novel_id=NovelId("test-novel"),
+            number=2,
+            title="第二章",
+            content=""  # 空内容
+        )
+        novel.chapters = [chapter1, chapter2]
+        mock_repository.get_by_id.return_value = novel
+
+        stats = service.get_novel_statistics("test-novel")
+
+        assert stats["total_chapters"] == 2
+        assert stats["completed_chapters"] == 1  # 只有一章有内容
+        assert stats["stage"] == "writing"
+        assert stats["total_words"] > 0
+
+    def test_get_novel_statistics_not_found(self, service, mock_repository):
+        """测试获取不存在的小说统计信息"""
+        mock_repository.get_by_id.return_value = None
+
+        with pytest.raises(EntityNotFoundError, match="Novel"):
+            service.get_novel_statistics("nonexistent")

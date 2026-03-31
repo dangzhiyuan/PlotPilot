@@ -1,10 +1,11 @@
 """Novel 应用服务"""
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from domain.novel.entities.novel import Novel, NovelStage
 from domain.novel.entities.chapter import Chapter
 from domain.novel.value_objects.novel_id import NovelId
 from domain.novel.value_objects.word_count import WordCount
 from domain.novel.repositories.novel_repository import NovelRepository
+from domain.shared.exceptions import EntityNotFoundError
 from application.dtos.novel_dto import NovelDTO
 
 
@@ -125,3 +126,48 @@ class NovelService:
         self.novel_repository.save(novel)
 
         return NovelDTO.from_domain(novel)
+
+    def update_novel_stage(self, novel_id: str, stage: str) -> NovelDTO:
+        """更新小说阶段
+
+        Args:
+            novel_id: 小说 ID
+            stage: 阶段
+
+        Returns:
+            更新后的 NovelDTO
+
+        Raises:
+            EntityNotFoundError: 如果小说不存在
+        """
+        novel = self.novel_repository.get_by_id(NovelId(novel_id))
+        if novel is None:
+            raise EntityNotFoundError("Novel", novel_id)
+
+        novel.stage = NovelStage(stage)
+        self.novel_repository.save(novel)
+
+        return NovelDTO.from_domain(novel)
+
+    def get_novel_statistics(self, novel_id: str) -> Dict[str, Any]:
+        """获取小说统计信息
+
+        Args:
+            novel_id: 小说 ID
+
+        Returns:
+            统计信息字典
+
+        Raises:
+            EntityNotFoundError: 如果小说不存在
+        """
+        novel = self.novel_repository.get_by_id(NovelId(novel_id))
+        if novel is None:
+            raise EntityNotFoundError("Novel", novel_id)
+
+        return {
+            "total_chapters": len(novel.chapters),
+            "total_words": novel.get_total_word_count().value,
+            "completed_chapters": len([c for c in novel.chapters if c.word_count.value > 0]),
+            "stage": novel.stage.value
+        }
