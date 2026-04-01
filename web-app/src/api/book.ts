@@ -24,16 +24,30 @@ import type {
 // DEPRECATED: This file is maintained for backward compatibility only.
 // Do NOT use these APIs in new code.
 //
-// Current dependencies (as of 2026-04-01):
+// Migration Status (as of 2026-04-01):
+// ✅ MIGRATED:
+//   - Chapter content: Use chapterApi.getChapter() / updateChapter()
+//   - Chapter review: Use chapterApi.getChapterReview() / saveChapterReview()
+//   - Chapter AI review: Use chapterApi.reviewChapterAi()
+//   - Chapter structure: Use chapterApi.getChapterStructure()
+//
+// ⚠️ PENDING MIGRATION:
+//   - Bible operations: BiblePanel.vue still uses bookApi.getBible() / saveBible()
+//     Reason: New Bible API lacks bulk update endpoint; needs backend enhancement
+//   - Cast operations: Multiple components use bookApi cast methods
+//   - Knowledge operations: Multiple components use bookApi knowledge methods
+//   - Desk operations: useWorkbench.ts uses bookApi.getDesk()
+//
+// Current dependencies:
 // - bookApi: BiblePanel.vue, CastGraphCompact.vue, KnowledgePanel.vue,
-//            KnowledgeTripleGraph.vue, useWorkbench.ts, Cast.vue, Chapter.vue
+//            KnowledgeTripleGraph.vue, useWorkbench.ts, Cast.vue, Chapter.vue (desk only)
 // - chatApi: ChatArea.vue
 // - jobApi: 已迁移至 api/workflow.ts（workflowApi）
 //
 // For new code, use the RESTful API clients:
 // - novelApi from './novel.ts' for novel operations
-// - chapterApi from './chapter.ts' for chapter operations
-// - bibleApi from './bible.ts' for bible operations
+// - chapterApi from './chapter.ts' for chapter operations (✅ FULLY MIGRATED)
+// - bibleApi from './bible.ts' for bible operations (partial - needs bulk update)
 // - aiApi from './ai.ts' for AI generation
 //
 // TODO: Migrate existing components to new API clients before removing this file.
@@ -64,19 +78,26 @@ export const bookApi = {
     request.get<KnowledgeSearchResponse>(`/book/${slug}/knowledge/search`, { params: { q, k } }) as Promise<KnowledgeSearchResponse>,
   getDesk: (slug: string) =>
     request.get<BookDeskResponse>(`/book/${slug}/desk`) as Promise<BookDeskResponse>,
+  /** @deprecated Use bibleApi.getBible() - Note: New API has different structure, needs bulk update endpoint */
   getBible: (slug: string) => request.get<Bible>(`/book/${slug}/bible`) as Promise<Bible>,
+  /** @deprecated Use bibleApi - Note: New API has different structure, needs bulk update endpoint */
   saveBible: (slug: string, data: unknown) => request.put(`/book/${slug}/bible`, data),
+  /** @deprecated Use chapterApi.getChapter() instead */
   getChapterBody: (slug: string, chapterId: number) =>
     request.get<ChapterBody>(`/book/${slug}/chapter/${chapterId}/body`) as Promise<ChapterBody>,
+  /** @deprecated Use chapterApi.updateChapter() instead */
   saveChapterBody: (slug: string, chapterId: number, content: string) =>
     request.put(`/book/${slug}/chapter/${chapterId}/body`, { content }),
+  /** @deprecated Use chapterApi.getChapterReview() instead */
   getChapterReview: (slug: string, chapterId: number) =>
     request.get<ChapterReview>(`/book/${slug}/chapter/${chapterId}/review`) as Promise<ChapterReview>,
+  /** @deprecated Use chapterApi.saveChapterReview() instead */
   saveChapterReview: (slug: string, chapterId: number, status: string, memo: string) =>
     request.put(`/book/${slug}/chapter/${chapterId}/review`, { status, memo }),
-  /** 自动审读：返回 status/memo；save=true 时写入 editorial */
+  /** @deprecated Use chapterApi.reviewChapterAi() instead - 自动审读：返回 status/memo；save=true 时写入 editorial */
   reviewChapterAi: (slug: string, chapterId: number, save = false) =>
     request.post<ChapterReviewAiResponse>(`/book/${slug}/chapter/${chapterId}/review-ai`, { save }) as Promise<ChapterReviewAiResponse>,
+  /** @deprecated Use chapterApi.getChapterStructure() instead */
   getChapterStructure: (slug: string, chapterId: number) =>
     request.get<ChapterStructure>(`/book/${slug}/chapter/${chapterId}/structure`) as Promise<ChapterStructure>,
 }

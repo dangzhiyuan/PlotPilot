@@ -3,6 +3,9 @@ from typing import Dict, Any
 from domain.bible.entities.bible import Bible
 from domain.bible.entities.character import Character
 from domain.bible.entities.world_setting import WorldSetting
+from domain.bible.entities.location import Location
+from domain.bible.entities.timeline_note import TimelineNote
+from domain.bible.entities.style_note import StyleNote
 from domain.bible.value_objects.character_id import CharacterId
 from domain.novel.value_objects.novel_id import NovelId
 
@@ -44,6 +47,32 @@ class BibleMapper:
                     "setting_type": setting.setting_type
                 }
                 for setting in bible.world_settings
+            ],
+            "locations": [
+                {
+                    "id": loc.id,
+                    "name": loc.name,
+                    "description": loc.description,
+                    "location_type": loc.location_type
+                }
+                for loc in bible.locations
+            ],
+            "timeline_notes": [
+                {
+                    "id": note.id,
+                    "event": note.event,
+                    "time_point": note.time_point,
+                    "description": note.description
+                }
+                for note in bible.timeline_notes
+            ],
+            "style_notes": [
+                {
+                    "id": note.id,
+                    "category": note.category,
+                    "content": note.content
+                }
+                for note in bible.style_notes
             ]
         }
 
@@ -104,6 +133,35 @@ class BibleMapper:
                     setting_type=setting_data["setting_type"]
                 )
                 bible.add_world_setting(setting)
+
+            # 添加地点
+            for loc_data in data.get("locations", []):
+                location = Location(
+                    id=loc_data["id"],
+                    name=loc_data["name"],
+                    description=loc_data.get("description", ""),
+                    location_type=loc_data.get("location_type", "other")
+                )
+                bible.add_location(location)
+
+            # 添加时间线笔记
+            for note_data in data.get("timeline_notes", []):
+                note = TimelineNote(
+                    id=note_data["id"],
+                    event=note_data["event"],
+                    time_point=note_data.get("time_point", ""),
+                    description=note_data.get("description", "")
+                )
+                bible.add_timeline_note(note)
+
+            # 添加风格笔记
+            for note_data in data.get("style_notes", []):
+                note = StyleNote(
+                    id=note_data["id"],
+                    category=note_data["category"],
+                    content=note_data["content"]
+                )
+                bible.add_style_note(note)
 
             return bible
         except (ValueError, KeyError) as e:

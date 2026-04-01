@@ -1,4 +1,5 @@
 import { apiClient } from './config'
+import type { BookStats } from '../types/api'
 
 export interface ChapterDTO {
   id: string
@@ -58,9 +59,9 @@ export const novelApi = {
     apiClient.put<NovelDTO>(`/novels/${novelId}/stage`, { stage }) as Promise<NovelDTO>,
 
   /**
-   * Get novel statistics
+   * 小说统计（与 Chapter 仓储一致，用于顶栏等；勿再用 /api/stats/book）
    * GET /api/v1/novels/{novelId}/statistics
    */
   getNovelStatistics: (novelId: string) =>
-    apiClient.get<any>(`/novels/${novelId}/statistics`) as Promise<any>,
+    apiClient.get<BookStats>(`/novels/${novelId}/statistics`) as Promise<BookStats>,
 }

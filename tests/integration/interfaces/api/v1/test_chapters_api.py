@@ -44,7 +44,7 @@ def setup_test_env(tmp_path):
     chapter_repo = FileChapterRepository(storage)
 
     # 创建服务
-    _test_novel_service = NovelService(novel_repo)
+    _test_novel_service = NovelService(novel_repo, chapter_repo)
     _test_chapter_service = ChapterService(chapter_repo, novel_repo)
 
     # 覆盖依赖

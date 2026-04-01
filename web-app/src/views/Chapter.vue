@@ -116,12 +116,11 @@
                 <n-statistic label="段落" :value="paragraphCount" />
                 <n-divider />
                 <div v-if="chapterStructure">
-                  <n-text depth="3" class="meta-line"
-                    >合并正文约 {{ chapterStructure.composite_char_len }} 字（含分场景拼接）</n-text
-                  >
-                  <n-text depth="3" class="meta-line meta-mono"
-                    >目录 {{ chapterStructure.storage_dir || '（扁平旧版或未建目录）' }}</n-text
-                  >
+                  <n-statistic label="分析字数" :value="chapterStructure.word_count" />
+                  <n-statistic label="分析段落" :value="chapterStructure.paragraph_count" />
+                  <n-statistic label="对话占比" :value="(chapterStructure.dialogue_ratio * 100).toFixed(1) + '%'" />
+                  <n-statistic label="场景数" :value="chapterStructure.scene_count" />
+                  <n-text depth="3" class="meta-line">节奏：{{ chapterStructure.pacing }}</n-text>
                 </div>
                 <n-divider />
                 <n-text depth="3" class="meta-line">创建：{{ createTime }}</n-text>
@@ -145,6 +144,25 @@ import DOMPurify from 'dompurify'
 import { bookApi } from '../api/book'
 import { chapterApi } from '../api/chapter'
 import { useStatsStore } from '../stores/statsStore'
+
+// Status mapping: old API (pending/ok/revise) <-> new API (draft/reviewed/approved)
+const statusToNew = (oldStatus: string): string => {
+  const map: Record<string, string> = {
+    'pending': 'draft',
+    'ok': 'approved',
+    'revise': 'reviewed'
+  }
+  return map[oldStatus] || 'draft'
+}
+
+const statusToOld = (newStatus: string): string => {
+  const map: Record<string, string> = {
+    'draft': 'pending',
+    'approved': 'ok',
+    'reviewed': 'revise'
+  }
+  return map[newStatus] || 'pending'
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -182,8 +200,11 @@ const reviewMemo = ref('')
 const savingReview = ref(false)
 const savingAiReview = ref(false)
 const chapterStructure = ref<{
-  composite_char_len: number
-  storage_dir: string | null
+  word_count: number
+  paragraph_count: number
+  dialogue_ratio: number
+  scene_count: number
+  pacing: string
 } | null>(null)
 
 const showPreview = ref(false)
@@ -273,7 +294,6 @@ const saveContent = async () => {
 
   try {
     await chapterApi.updateChapter(slug, chapterId.value, {
-      title: '', // Title is not editable in this view, pass empty string
       content: content.value
     })
     saveStatus.value = 'saved'
@@ -294,7 +314,8 @@ const saveContent = async () => {
 const saveReview = async () => {
   savingReview.value = true
   try {
-    await bookApi.saveChapterReview(slug, chapterId.value, reviewStatus.value, reviewMemo.value)
+    const newStatus = statusToNew(reviewStatus.value)
+    await chapterApi.saveChapterReview(slug, chapterId.value, newStatus, reviewMemo.value)
     message.success('审定已保存')
     // Refresh book stats after successful save
     statsStore.onChapterSaved(slug, chapterId.value)
@@ -309,8 +330,8 @@ const saveReview = async () => {
 const runAiReview = async (save: boolean) => {
   savingAiReview.value = true
   try {
-    const r = await bookApi.reviewChapterAi(slug, chapterId.value, save)
-    reviewStatus.value = r.status
+    const r = await chapterApi.reviewChapterAi(slug, chapterId.value, save)
+    reviewStatus.value = statusToOld(r.status)
     reviewMemo.value = r.memo
     message.success(save ? '已写入审定意见' : '已填入审读意见')
   } catch (e: any) {
@@ -357,8 +378,8 @@ const loadChapter = async () => {
   const [desk, chapterData, rev, structureResult] = await Promise.allSettled([
     bookApi.getDesk(slug),
     chapterApi.getChapter(slug, cid),
-    bookApi.getChapterReview(slug, cid),
-    bookApi.getChapterStructure(slug, cid)
+    chapterApi.getChapterReview(slug, cid),
+    chapterApi.getChapterStructure(slug, cid)
   ])
 
   // Handle desk API result
@@ -382,15 +403,18 @@ const loadChapter = async () => {
 
   // Handle review API result
   if (rev.status === 'fulfilled') {
-    reviewStatus.value = rev.value.status
+    reviewStatus.value = statusToOld(rev.value.status)
     reviewMemo.value = rev.value.memo
   }
 
   // Handle structure API result (this one is optional, can fail gracefully)
   if (structureResult.status === 'fulfilled') {
     chapterStructure.value = {
-      composite_char_len: structureResult.value.composite_char_len,
-      storage_dir: structureResult.value.storage_dir ?? null,
+      word_count: structureResult.value.word_count,
+      paragraph_count: structureResult.value.paragraph_count,
+      dialogue_ratio: structureResult.value.dialogue_ratio,
+      scene_count: structureResult.value.scene_count,
+      pacing: structureResult.value.pacing,
     }
   } else {
     console.warn('Failed to load chapter structure:', structureResult.reason)

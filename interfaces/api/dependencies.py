@@ -153,7 +153,7 @@ def get_novel_service() -> NovelService:
     Returns:
         NovelService 实例
     """
-    return NovelService(get_novel_repository())
+    return NovelService(get_novel_repository(), get_chapter_repository())
 
 
 def get_chapter_service() -> ChapterService:

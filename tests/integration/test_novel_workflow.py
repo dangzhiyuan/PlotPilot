@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from infrastructure.persistence.storage.file_storage import FileStorage
 from infrastructure.persistence.repositories.file_novel_repository import FileNovelRepository
+from infrastructure.persistence.repositories.file_chapter_repository import FileChapterRepository
 from application.services.novel_service import NovelService
 
 
@@ -22,8 +23,9 @@ class TestNovelWorkflow:
     def service(self, temp_dir):
         """创建完整的服务栈"""
         storage = FileStorage(temp_dir)
-        repository = FileNovelRepository(storage)
-        return NovelService(repository)
+        novel_repo = FileNovelRepository(storage)
+        chapter_repo = FileChapterRepository(storage)
+        return NovelService(novel_repo, chapter_repo)
 
     def test_complete_novel_workflow(self, service):
         """测试完整的小说创建和管理流程"""

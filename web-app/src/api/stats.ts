@@ -21,6 +21,10 @@ request.interceptors.response.use(response => {
   return body
 })
 
+function enc(slug: string): string {
+  return encodeURIComponent(slug)
+}
+
 export const statsApi = {
   /**
    * Get global statistics across all books
@@ -32,21 +36,22 @@ export const statsApi = {
    * Get statistics for a specific book
    * GET /stats/book/{slug}
    */
-  getBook: (slug: string) => request.get<BookStats>(`/stats/book/${slug}`) as Promise<BookStats>,
+  getBook: (slug: string) =>
+    request.get<BookStats>(`/stats/book/${enc(slug)}`) as Promise<BookStats>,
 
   /**
    * Get statistics for a specific chapter
    * GET /stats/book/{slug}/chapter/{chapterId}
    */
   getChapter: (slug: string, chapterId: number) =>
-    request.get<ChapterStats>(`/stats/book/${slug}/chapter/${chapterId}`) as Promise<ChapterStats>,
+    request.get<ChapterStats>(`/stats/book/${enc(slug)}/chapter/${chapterId}`) as Promise<ChapterStats>,
 
   /**
    * Get writing progress over time
    * GET /stats/book/{slug}/progress
    */
   getProgress: (slug: string, days = 30) =>
-    request.get<WritingProgress[]>(`/stats/book/${slug}/progress`, {
+    request.get<WritingProgress[]>(`/stats/book/${enc(slug)}/progress`, {
       params: { days },
     }) as Promise<WritingProgress[]>,
 

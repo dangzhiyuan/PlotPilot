@@ -13,8 +13,29 @@ export interface ChapterDTO {
 }
 
 export interface UpdateChapterRequest {
-  title: string
   content: string
+}
+
+export interface ChapterReviewDTO {
+  status: string
+  memo: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChapterStructureDTO {
+  word_count: number
+  paragraph_count: number
+  dialogue_ratio: number
+  scene_count: number
+  pacing: string
+}
+
+export interface ChapterReviewAiResponse {
+  ok: boolean
+  status: string
+  memo: string
+  saved: boolean
 }
 
 export const chapterApi = {
@@ -38,4 +59,32 @@ export const chapterApi = {
    */
   updateChapter: (novelId: string, chapterNumber: number, data: UpdateChapterRequest) =>
     apiClient.put<ChapterDTO>(`/novels/${novelId}/chapters/${chapterNumber}`, data) as Promise<ChapterDTO>,
+
+  /**
+   * Get chapter review
+   * GET /api/v1/novels/{novelId}/chapters/{chapterNumber}/review
+   */
+  getChapterReview: (novelId: string, chapterNumber: number) =>
+    apiClient.get<ChapterReviewDTO>(`/novels/${novelId}/chapters/${chapterNumber}/review`) as Promise<ChapterReviewDTO>,
+
+  /**
+   * Save chapter review
+   * PUT /api/v1/novels/{novelId}/chapters/{chapterNumber}/review
+   */
+  saveChapterReview: (novelId: string, chapterNumber: number, status: string, memo: string) =>
+    apiClient.put<ChapterReviewDTO>(`/novels/${novelId}/chapters/${chapterNumber}/review`, { status, memo }) as Promise<ChapterReviewDTO>,
+
+  /**
+   * AI review chapter
+   * POST /api/v1/novels/{novelId}/chapters/{chapterNumber}/review-ai
+   */
+  reviewChapterAi: (novelId: string, chapterNumber: number, save: boolean) =>
+    apiClient.post<ChapterReviewAiResponse>(`/novels/${novelId}/chapters/${chapterNumber}/review-ai`, { save }) as Promise<ChapterReviewAiResponse>,
+
+  /**
+   * Get chapter structure analysis
+   * GET /api/v1/novels/{novelId}/chapters/{chapterNumber}/structure
+   */
+  getChapterStructure: (novelId: string, chapterNumber: number) =>
+    apiClient.get<ChapterStructureDTO>(`/novels/${novelId}/chapters/${chapterNumber}/structure`) as Promise<ChapterStructureDTO>,
 }

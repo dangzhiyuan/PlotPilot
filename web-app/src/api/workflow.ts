@@ -36,7 +36,11 @@ export const workflowApi = {
    * AutoNovelGenerationWorkflow：上下文 + 生成 + 一致性报告（子项目 8）
    */
   generateChapterWithContext: (novelId: string, data: GenerateChapterWithContextPayload) =>
-    apiClient.post<GenerateChapterWorkflowResponse>(`/novels/${novelId}/generate-chapter`, data) as Promise<GenerateChapterWorkflowResponse>,
+    apiClient.post<GenerateChapterWorkflowResponse>(
+      `/novels/${novelId}/generate-chapter`,
+      data,
+      { timeout: 180_000 }
+    ) as Promise<GenerateChapterWorkflowResponse>,
 
   /** GET /api/v1/novels/{novel_id}/consistency-report */
   getConsistencyReport: (novelId: string, chapter?: number) =>
@@ -54,7 +58,7 @@ export const workflowApi = {
 
   /**
    * 以下 Job 路由 **后端尚未实现**（`interfaces` 无 `/jobs`），调用会 404。
-   * 实现后可保留这些方法；未实现前工作台「结构规划/撰稿」会失败。
+   * 撰稿请用 `generateChapterWithContext`（Workbench 模态框）；结构规划仍依赖 Job，未实现前会失败。
    */
   /** POST /api/v1/novels/{novel_id}/jobs/plan */
   startPlanJob: (novelId: string, dryRun = false, mode: 'initial' | 'revise' = 'initial') =>

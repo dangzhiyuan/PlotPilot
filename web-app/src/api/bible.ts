@@ -14,11 +14,34 @@ export interface WorldSettingDTO {
   setting_type: string
 }
 
+export interface LocationDTO {
+  id: string
+  name: string
+  description: string
+  location_type: string
+}
+
+export interface TimelineNoteDTO {
+  id: string
+  event: string
+  time_point: string
+  description: string
+}
+
+export interface StyleNoteDTO {
+  id: string
+  category: string
+  content: string
+}
+
 export interface BibleDTO {
   id: string
   novel_id: string
   characters: CharacterDTO[]
   world_settings: WorldSettingDTO[]
+  locations: LocationDTO[]
+  timeline_notes: TimelineNoteDTO[]
+  style_notes: StyleNoteDTO[]
 }
 
 export interface AddCharacterRequest {
@@ -68,4 +91,20 @@ export const bibleApi = {
     data: { setting_id: string; name: string; description: string; setting_type: string }
   ) =>
     apiClient.post<BibleDTO>(`/bible/novels/${novelId}/bible/world-settings`, data) as Promise<BibleDTO>,
+
+  /**
+   * Bulk update entire bible
+   * PUT /api/v1/bible/novels/{novelId}/bible
+   */
+  updateBible: (
+    novelId: string,
+    data: {
+      characters: CharacterDTO[]
+      world_settings: WorldSettingDTO[]
+      locations: LocationDTO[]
+      timeline_notes: TimelineNoteDTO[]
+      style_notes: StyleNoteDTO[]
+    }
+  ) =>
+    apiClient.put<BibleDTO>(`/bible/novels/${novelId}/bible`, data) as Promise<BibleDTO>,
 }

@@ -41,7 +41,7 @@ def setup_test_env(tmp_path):
     cast_repo = FileCastRepository(storage)
 
     # Create services
-    _test_novel_service = NovelService(novel_repo)
+    _test_novel_service = NovelService(novel_repo, chapter_repo)
     _test_cast_service = CastService(cast_repo, test_data)
 
     # Override dependencies

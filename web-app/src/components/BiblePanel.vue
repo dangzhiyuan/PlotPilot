@@ -193,7 +193,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
 import { useMessage } from 'naive-ui'
-import { bookApi } from '../api/book'
+import { bibleApi } from '../api/bible'
+import type { CharacterDTO, LocationDTO, TimelineNoteDTO, StyleNoteDTO } from '../api/bible'
 
 const props = defineProps<{ slug: string }>()
 const message = useMessage()
@@ -242,30 +243,96 @@ const syncJsonFromState = () => {
   )
 }
 
+// Convert new API format to old format
+const fromApiFormat = (bible: any) => {
+  return {
+    characters: Array.isArray(bible.characters)
+      ? bible.characters.map((c: CharacterDTO) => {
+          // Parse description to extract role, traits, arc_note
+          const desc = c.description || ''
+          const parts = desc.split('\n---\n')
+          return {
+            name: c.name || '',
+            role: parts[0] || '',
+            traits: parts[1] || '',
+            arc_note: parts[2] || '',
+          }
+        })
+      : [],
+    locations: Array.isArray(bible.locations)
+      ? bible.locations.map((l: LocationDTO) => ({
+          name: l.name || '',
+          description: l.description || '',
+        }))
+      : [],
+    timeline_notes: Array.isArray(bible.timeline_notes)
+      ? bible.timeline_notes.map((n: TimelineNoteDTO) => `${n.time_point} · ${n.event}`)
+      : [],
+    style_notes: Array.isArray(bible.style_notes) && bible.style_notes.length > 0
+      ? bible.style_notes.map((n: StyleNoteDTO) => n.content).join('\n\n')
+      : '',
+  }
+}
+
+// Convert old format to new API format
+const toApiFormat = (data: any) => {
+  const characters: CharacterDTO[] = data.characters.map((c: BibleCharacter, i: number) => ({
+    id: `char-${i + 1}`,
+    name: c.name || '',
+    description: [c.role, c.traits, c.arc_note].filter(Boolean).join('\n---\n'),
+    relationships: [],
+  }))
+
+  const locations: LocationDTO[] = data.locations.map((l: BibleLocation, i: number) => ({
+    id: `loc-${i + 1}`,
+    name: l.name || '',
+    description: l.description || '',
+    location_type: 'general',
+  }))
+
+  const timeline_notes: TimelineNoteDTO[] = data.timeline_notes
+    .map((note: string, i: number) => {
+      const parts = String(note || '').split('·').map(s => s.trim())
+      return {
+        id: `timeline-${i + 1}`,
+        event: parts.length > 1 ? parts[1] : parts[0] || '',
+        time_point: parts.length > 1 ? parts[0] : '',
+        description: '',
+      }
+    })
+    .filter((n: TimelineNoteDTO) => n.event)
+
+  const style_notes: StyleNoteDTO[] = data.style_notes
+    ? [
+        {
+          id: 'style-1',
+          category: 'general',
+          content: data.style_notes,
+        },
+      ]
+    : []
+
+  return { characters, world_settings: [], locations, timeline_notes, style_notes }
+}
+
 const load = async () => {
   try {
-    const b = await bookApi.getBible(props.slug)
-    state.value = {
-      characters: Array.isArray(b.characters)
-        ? b.characters.map((x: any) => ({
-            name: x.name || '',
-            role: x.role || '',
-            traits: x.traits || '',
-            arc_note: x.arc_note || '',
-          }))
-        : [],
-      locations: Array.isArray(b.locations)
-        ? b.locations.map((x: any) => ({
-            name: x.name || '',
-            description: x.description || '',
-          }))
-        : [],
-      timeline_notes: Array.isArray(b.timeline_notes) ? [...b.timeline_notes] : [],
-      style_notes: typeof b.style_notes === 'string' ? b.style_notes : '',
-    }
+    const bible = await bibleApi.getBible(props.slug)
+    state.value = fromApiFormat(bible)
     syncJsonFromState()
-  } catch {
-    message.error('加载设定失败')
+  } catch (err: any) {
+    // If Bible doesn't exist, create it
+    if (err?.response?.status === 404) {
+      try {
+        await bibleApi.createBible(props.slug, `bible-${props.slug}`)
+        state.value = emptyState()
+        syncJsonFromState()
+      } catch {
+        message.error('创建设定失败')
+      }
+    } else {
+      message.error('加载设定失败')
+    }
   }
 }
 
@@ -283,7 +350,8 @@ const save = async () => {
         style_notes: state.value.style_notes,
       }
     }
-    await bookApi.saveBible(props.slug, payload)
+    const apiData = toApiFormat(payload)
+    await bibleApi.updateBible(props.slug, apiData)
     message.success('设定已保存')
     if (showJson.value) {
       await load()

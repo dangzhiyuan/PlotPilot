@@ -119,7 +119,67 @@ class StatsRepositoryAdapter:
                 "id": chapter_num,
                 "title": (ch.get("title") or "").strip(),
             })
+        if not outline_chapters:
+            outline_chapters = self._outline_chapters_from_disk(slug)
         return {"chapters": outline_chapters}
+
+    def _outline_chapters_from_disk(self, slug: str) -> List[Dict]:
+        """当 novel 聚合里 chapters 为空时，从 ``novels/{slug}/chapters/*.json`` 扫描章列表。
+
+        与 :class:`FileChapterRepository` 落盘路径一致，避免统计 API 与 v1 章节 API 脱节。
+        """
+        ch_dir = self.novels_dir / slug / "chapters"
+        if not ch_dir.is_dir():
+            return []
+        out: List[Dict] = []
+        for p in sorted(ch_dir.glob("*.json")):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                num = data.get("number")
+                if num is None:
+                    continue
+                chapter_num = int(num)
+                out.append(
+                    {
+                        "id": chapter_num,
+                        "title": (data.get("title") or "").strip(),
+                    }
+                )
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                logger.warning(f"Skip chapter file {p}: {e}")
+        out.sort(key=lambda x: x["id"])
+        return out
+
+    def _chapter_content_from_disk(self, slug: str, chapter_id: int) -> Optional[str]:
+        """按章节号从 ``novels/{slug}/chapters/*.json`` 读取正文。"""
+        ch_dir = self.novels_dir / slug / "chapters"
+        if not ch_dir.is_dir():
+            return None
+        for p in ch_dir.glob("*.json"):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                num = data.get("number")
+                if num is None:
+                    continue
+                if int(num) != chapter_id:
+                    continue
+                raw = data.get("content")
+                return raw if isinstance(raw, str) else None
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                logger.warning(f"Skip chapter file {p}: {e}")
+        return None
+
+    @staticmethod
+    def _chapter_number_equals(ch: Dict, chapter_id: int) -> bool:
+        n = ch.get("number")
+        if n is None:
+            return False
+        try:
+            return int(n) == chapter_id
+        except (TypeError, ValueError):
+            return False
 
     def get_chapter_content(self, slug: str, chapter_id: int) -> Optional[str]:
         """Read a chapter's content from the novel data.
@@ -138,12 +198,21 @@ class StatsRepositoryAdapter:
 
             chapters = manifest.get("chapters", [])
 
-            # Find chapter by ID
             for chapter in chapters:
-                if chapter.get("number") == chapter_id:
-                    content = chapter.get("content", "")
+                if not self._chapter_number_equals(chapter, chapter_id):
+                    continue
+                content = chapter.get("content", "")
+                if isinstance(content, str) and content.strip():
                     logger.debug(f"Successfully read chapter {chapter_id} for novel: {slug}")
                     return content
+                disk = self._chapter_content_from_disk(slug, chapter_id)
+                if disk is not None:
+                    return disk
+                return content if isinstance(content, str) else None
+
+            disk_only = self._chapter_content_from_disk(slug, chapter_id)
+            if disk_only is not None:
+                return disk_only
 
             logger.warning(f"Chapter {chapter_id} not found in novel {slug}")
             return None

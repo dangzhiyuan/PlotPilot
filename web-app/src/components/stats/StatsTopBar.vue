@@ -93,6 +93,21 @@ const stats = computed(() => {
   ]
 })
 
+function formatStatsError(err: unknown): string {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const data = (err as { response?: { data?: { detail?: unknown } } }).response?.data
+    const d = data?.detail
+    if (typeof d === 'string') return d
+    if (Array.isArray(d)) {
+      return d
+        .map((x: { msg?: string }) => (typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)))
+        .join('; ')
+    }
+  }
+  if (err instanceof Error) return err.message
+  return String(err)
+}
+
 function formatDate(dateStr: string): string {
   try {
     const date = new Date(dateStr)
@@ -121,7 +136,7 @@ onMounted(async () => {
     await statsStore.loadBookStats(props.slug)
   } catch (err) {
     console.error('Failed to load book stats:', err)
-    error.value = '加载统计数据失败'
+    error.value = `加载统计数据失败：${formatStatsError(err)}`
   } finally {
     loading.value = false
   }

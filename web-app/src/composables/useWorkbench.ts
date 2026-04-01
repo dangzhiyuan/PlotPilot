@@ -12,7 +12,6 @@ const PROGRESS_MAX = 93
 const PROGRESS_MIN_STEP = 2
 const PROGRESS_MAX_STEP = 6
 const STATS_DAYS = 30
-const DEFAULT_CHAPTER_ID = 1
 const POLLING_INTERVAL = 1000
 
 // Type definitions
@@ -130,15 +129,6 @@ export function useWorkbench(options: UseWorkbenchOptions) {
     showPlanModal.value = false
     try {
       const res = await workflowApi.startPlanJob(slug, planDryRun.value, planMode.value)
-      startPolling(res.job_id)
-    } catch (error: any) {
-      message.error(error.response?.data?.detail || '启动失败')
-    }
-  }
-
-  const startWrite = async () => {
-    try {
-      const res = await workflowApi.startWriteJob(slug, DEFAULT_CHAPTER_ID)
       startPolling(res.job_id)
     } catch (error: any) {
       message.error(error.response?.data?.detail || '启动失败')
@@ -279,7 +269,6 @@ export function useWorkbench(options: UseWorkbenchOptions) {
     handleUpdateSettings,
     openPlanModal,
     confirmPlan,
-    startWrite,
     startPolling,
     cancelRunningTask,
     stopPolling,

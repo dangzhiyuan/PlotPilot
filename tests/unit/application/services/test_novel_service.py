@@ -21,9 +21,13 @@ class TestNovelService:
         return Mock()
 
     @pytest.fixture
-    def service(self, mock_repository):
+    def mock_chapter_repository(self):
+        return Mock()
+
+    @pytest.fixture
+    def service(self, mock_repository, mock_chapter_repository):
         """创建服务实例"""
-        return NovelService(mock_repository)
+        return NovelService(mock_repository, mock_chapter_repository)
 
     def test_create_novel(self, service, mock_repository):
         """测试创建小说"""
@@ -167,9 +171,8 @@ class TestNovelService:
         with pytest.raises(EntityNotFoundError, match="Novel"):
             service.update_novel_stage("nonexistent", "writing")
 
-    def test_get_novel_statistics(self, service, mock_repository):
-        """测试获取小说统计信息"""
-        # 准备 mock 数据
+    def test_get_novel_statistics(self, service, mock_repository, mock_chapter_repository):
+        """测试获取小说统计信息（章节来自 Chapter 仓储）"""
         novel = Novel(
             id=NovelId("test-novel"),
             title="测试小说",
@@ -177,7 +180,6 @@ class TestNovelService:
             target_chapters=10,
             stage=NovelStage.WRITING
         )
-        # 添加章节
         chapter1 = Chapter(
             id="chapter-1",
             novel_id=NovelId("test-novel"),
@@ -192,15 +194,19 @@ class TestNovelService:
             title="第二章",
             content=""  # 空内容
         )
-        novel.chapters = [chapter1, chapter2]
         mock_repository.get_by_id.return_value = novel
+        mock_chapter_repository.list_by_novel.return_value = [chapter1, chapter2]
 
         stats = service.get_novel_statistics("test-novel")
 
         assert stats["total_chapters"] == 2
-        assert stats["completed_chapters"] == 1  # 只有一章有内容
+        assert stats["completed_chapters"] == 1
         assert stats["stage"] == "writing"
         assert stats["total_words"] > 0
+        assert stats["slug"] == "test-novel"
+        assert stats["title"] == "测试小说"
+        assert "completion_rate" in stats
+        mock_chapter_repository.list_by_novel.assert_called_once_with(NovelId("test-novel"))
 
     def test_get_novel_statistics_not_found(self, service, mock_repository):
         """测试获取不存在的小说统计信息"""

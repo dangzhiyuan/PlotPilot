@@ -1,10 +1,12 @@
 """Novel 应用服务"""
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from domain.novel.entities.novel import Novel, NovelStage
 from domain.novel.entities.chapter import Chapter
 from domain.novel.value_objects.novel_id import NovelId
 from domain.novel.value_objects.word_count import WordCount
 from domain.novel.repositories.novel_repository import NovelRepository
+from domain.novel.repositories.chapter_repository import ChapterRepository
 from domain.shared.exceptions import EntityNotFoundError
 from application.dtos.novel_dto import NovelDTO
 
@@ -15,13 +17,19 @@ class NovelService:
     协调领域对象和基础设施，实现应用用例。
     """
 
-    def __init__(self, novel_repository: NovelRepository):
+    def __init__(
+        self,
+        novel_repository: NovelRepository,
+        chapter_repository: ChapterRepository,
+    ):
         """初始化服务
 
         Args:
             novel_repository: Novel 仓储
+            chapter_repository: Chapter 仓储（统计以落盘章节为准）
         """
         self.novel_repository = novel_repository
+        self.chapter_repository = chapter_repository
 
     def create_novel(
         self,
@@ -156,13 +164,13 @@ class NovelService:
         return NovelDTO.from_domain(novel)
 
     def get_novel_statistics(self, novel_id: str) -> Dict[str, Any]:
-        """获取小说统计信息
+        """获取小说统计信息（以 Chapter 仓储落盘为准，与列表/读写 API 一致）
 
         Args:
             novel_id: 小说 ID
 
         Returns:
-            统计信息字典
+            与前端顶栏 BookStats 对齐的字段；数据来源为 ``list_by_novel``，非 novel 聚合 JSON 内嵌章节。
 
         Raises:
             EntityNotFoundError: 如果小说不存在
@@ -171,9 +179,21 @@ class NovelService:
         if novel is None:
             raise EntityNotFoundError("Novel", novel_id)
 
+        chapters = self.chapter_repository.list_by_novel(NovelId(novel_id))
+        total = len(chapters)
+        total_words = sum(c.word_count.value for c in chapters)
+        completed = sum(1 for c in chapters if c.word_count.value > 0)
+        avg = total_words // total if total > 0 else 0
+        completion = (completed / total) if total > 0 else 0.0
+
         return {
-            "total_chapters": len(novel.chapters),
-            "total_words": novel.get_total_word_count().value,
-            "completed_chapters": len([c for c in novel.chapters if c.word_count.value > 0]),
-            "stage": novel.stage.value
+            "slug": novel_id,
+            "title": novel.title,
+            "total_chapters": total,
+            "completed_chapters": completed,
+            "total_words": total_words,
+            "avg_chapter_words": avg,
+            "completion_rate": completion,
+            "stage": novel.stage.value,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
         }

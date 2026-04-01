@@ -44,7 +44,7 @@ def setup_test_env(tmp_path):
     bible_repo = FileBibleRepository(storage)
 
     # 创建服务
-    _test_novel_service = NovelService(novel_repo)
+    _test_novel_service = NovelService(novel_repo, chapter_repo)
     _test_bible_service = BibleService(bible_repo)
 
     # 覆盖依赖

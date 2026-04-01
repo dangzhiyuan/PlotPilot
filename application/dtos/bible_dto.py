@@ -6,6 +6,9 @@ if TYPE_CHECKING:
     from domain.bible.entities.bible import Bible
     from domain.bible.entities.character import Character
     from domain.bible.entities.world_setting import WorldSetting
+    from domain.bible.entities.location import Location
+    from domain.bible.entities.timeline_note import TimelineNote
+    from domain.bible.entities.style_note import StyleNote
 
 
 @dataclass
@@ -61,12 +64,91 @@ class WorldSettingDTO:
 
 
 @dataclass
+class LocationDTO:
+    """地点 DTO"""
+    id: str
+    name: str
+    description: str
+    location_type: str
+
+    @classmethod
+    def from_domain(cls, location: 'Location') -> 'LocationDTO':
+        """从领域对象创建 DTO
+
+        Args:
+            location: Location 领域对象
+
+        Returns:
+            LocationDTO
+        """
+        return cls(
+            id=location.id,
+            name=location.name,
+            description=location.description,
+            location_type=location.location_type
+        )
+
+
+@dataclass
+class TimelineNoteDTO:
+    """时间线笔记 DTO"""
+    id: str
+    event: str
+    time_point: str
+    description: str
+
+    @classmethod
+    def from_domain(cls, note: 'TimelineNote') -> 'TimelineNoteDTO':
+        """从领域对象创建 DTO
+
+        Args:
+            note: TimelineNote 领域对象
+
+        Returns:
+            TimelineNoteDTO
+        """
+        return cls(
+            id=note.id,
+            event=note.event,
+            time_point=note.time_point,
+            description=note.description
+        )
+
+
+@dataclass
+class StyleNoteDTO:
+    """风格笔记 DTO"""
+    id: str
+    category: str
+    content: str
+
+    @classmethod
+    def from_domain(cls, note: 'StyleNote') -> 'StyleNoteDTO':
+        """从领域对象创建 DTO
+
+        Args:
+            note: StyleNote 领域对象
+
+        Returns:
+            StyleNoteDTO
+        """
+        return cls(
+            id=note.id,
+            category=note.category,
+            content=note.content
+        )
+
+
+@dataclass
 class BibleDTO:
     """Bible DTO"""
     id: str
     novel_id: str
     characters: List[CharacterDTO]
     world_settings: List[WorldSettingDTO]
+    locations: List[LocationDTO]
+    timeline_notes: List[TimelineNoteDTO]
+    style_notes: List[StyleNoteDTO]
 
     @classmethod
     def from_domain(cls, bible: 'Bible') -> 'BibleDTO':
@@ -82,5 +164,8 @@ class BibleDTO:
             id=bible.id,
             novel_id=bible.novel_id.value,
             characters=[CharacterDTO.from_domain(c) for c in bible.characters],
-            world_settings=[WorldSettingDTO.from_domain(s) for s in bible.world_settings]
+            world_settings=[WorldSettingDTO.from_domain(s) for s in bible.world_settings],
+            locations=[LocationDTO.from_domain(loc) for loc in bible.locations],
+            timeline_notes=[TimelineNoteDTO.from_domain(n) for n in bible.timeline_notes],
+            style_notes=[StyleNoteDTO.from_domain(n) for n in bible.style_notes]
         )

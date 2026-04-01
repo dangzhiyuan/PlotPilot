@@ -26,7 +26,7 @@
                   :current-chapter-id="currentChapterId"
                   @set-right-panel="setRightPanel"
                   @open-plan-modal="openPlanModal"
-                  @start-write="startWrite"
+                  @start-write="openWorkflowGenerate"
                   @messages-updated="onMessagesUpdated"
                 />
               </template>
@@ -79,6 +79,14 @@
         <n-button size="small" secondary @click="cancelRunningTask">终止任务</n-button>
       </n-space>
     </n-modal>
+
+    <GenerateChapterWorkflowModal
+      v-model:show="showWorkflowModal"
+      :slug="slug"
+      :chapters="chapters"
+      :default-chapter-id="currentChapterId"
+      @saved="onWorkflowChapterSaved"
+    />
   </div>
 </template>
 
@@ -91,12 +99,24 @@ import StatsTopBar from '../components/stats/StatsTopBar.vue'
 import ChapterList from '../components/workbench/ChapterList.vue'
 import ChatArea from '../components/workbench/ChatArea.vue'
 import SettingsPanel from '../components/workbench/SettingsPanel.vue'
+import GenerateChapterWorkflowModal from '../components/workbench/GenerateChapterWorkflowModal.vue'
 
 const route = useRoute()
 const message = useMessage()
 
 const slug = route.params.slug as string
 const chatAreaRef = ref<InstanceType<typeof ChatArea> | null>(null)
+const showWorkflowModal = ref(false)
+
+const openWorkflowGenerate = () => {
+  showWorkflowModal.value = true
+}
+
+const onWorkflowChapterSaved = async () => {
+  await loadDesk()
+  await chatAreaRef.value?.fetchMessages?.()
+  biblePanelKey.value += 1
+}
 
 const {
   bookTitle,
@@ -118,7 +138,6 @@ const {
   loadDesk,
   openPlanModal,
   confirmPlan,
-  startWrite,
   startPolling,
   cancelRunningTask,
   stopPolling,

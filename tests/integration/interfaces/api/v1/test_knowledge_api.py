@@ -44,7 +44,7 @@ def setup_test_env(tmp_path):
     knowledge_repo = FileKnowledgeRepository(storage)
 
     # 创建服务
-    _test_novel_service = NovelService(novel_repo)
+    _test_novel_service = NovelService(novel_repo, chapter_repo)
     _test_knowledge_service = KnowledgeService(knowledge_repo)
 
     # 覆盖依赖
