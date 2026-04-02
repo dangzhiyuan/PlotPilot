@@ -7,3 +7,6 @@ venv/
 output/novels/*/
 !output/novels/.gitkeep
 .superpowers/
+*.log
+*.pid
+*.egg-info/
