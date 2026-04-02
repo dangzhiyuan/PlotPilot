@@ -50,11 +50,8 @@
     <n-tabs v-model:value="mainTab" type="line" size="medium" animated class="bible-tabs">
       <!-- 文风公约 Tab -->
       <n-tab-pane name="style" tab="文风公约">
-        <div class="bible-subtab-header">
-          <n-select v-model:value="subTab" :options="subTabOptions" size="small" style="width: 140px" />
-        </div>
         <n-scrollbar class="bible-scroll">
-          <div v-if="subTab === 'editor'" class="bible-form">
+          <div class="bible-form">
             <n-card size="small" class="bible-card" :bordered="false" :segmented="{ content: true, footer: false }">
               <template #header>
                 <div class="bcard-head">
@@ -76,25 +73,19 @@
               />
             </n-card>
           </div>
-          <div v-else class="bible-json">
-            <n-input
-              v-model:value="jsonRaw"
-              type="textarea"
-              :autosize="{ minRows: 20 }"
-              placeholder="JSON 格式"
-              class="bible-json-input"
-            />
-          </div>
         </n-scrollbar>
+        <div class="bible-footer">
+          <n-space :size="8">
+            <n-button size="small" type="primary" :loading="saving" @click="save">保存</n-button>
+            <n-button size="small" @click="openJsonModal">JSON 编辑器</n-button>
+          </n-space>
+        </div>
       </n-tab-pane>
 
       <!-- 人物 Tab -->
       <n-tab-pane name="characters" tab="人物">
-        <div class="bible-subtab-header">
-          <n-select v-model:value="subTab" :options="subTabOptions" size="small" style="width: 140px" />
-        </div>
         <n-scrollbar class="bible-scroll">
-          <div v-if="subTab === 'editor'" class="bible-form">
+          <div class="bible-form">
             <n-card size="small" class="bible-card" :bordered="false" :segmented="{ content: true, footer: false }">
           <template #header>
             <div class="bcard-head">
@@ -158,25 +149,19 @@
           </n-space>
         </n-card>
           </div>
-          <div v-else class="bible-json">
-            <n-input
-              v-model:value="jsonRaw"
-              type="textarea"
-              :autosize="{ minRows: 20 }"
-              placeholder="JSON 格式"
-              class="bible-json-input"
-            />
-          </div>
         </n-scrollbar>
+        <div class="bible-footer">
+          <n-space :size="8">
+            <n-button size="small" type="primary" :loading="saving" @click="save">保存</n-button>
+            <n-button size="small" @click="openJsonModal">JSON 编辑器</n-button>
+          </n-space>
+        </div>
       </n-tab-pane>
 
       <!-- 地点/势力 Tab -->
       <n-tab-pane name="locations" tab="地点/势力">
-        <div class="bible-subtab-header">
-          <n-select v-model:value="subTab" :options="subTabOptions" size="small" style="width: 140px" />
-        </div>
         <n-scrollbar class="bible-scroll">
-          <div v-if="subTab === 'editor'" class="bible-form">
+          <div class="bible-form">
             <n-card size="small" class="bible-card" :bordered="false" :segmented="{ content: true, footer: false }">
           <template #header>
             <div class="bcard-head">
@@ -205,25 +190,19 @@
           </n-space>
         </n-card>
           </div>
-          <div v-else class="bible-json">
-            <n-input
-              v-model:value="jsonRaw"
-              type="textarea"
-              :autosize="{ minRows: 20 }"
-              placeholder="JSON 格式"
-              class="bible-json-input"
-            />
-          </div>
         </n-scrollbar>
+        <div class="bible-footer">
+          <n-space :size="8">
+            <n-button size="small" type="primary" :loading="saving" @click="save">保存</n-button>
+            <n-button size="small" @click="openJsonModal">JSON 编辑器</n-button>
+          </n-space>
+        </div>
       </n-tab-pane>
 
       <!-- 时间线 Tab -->
       <n-tab-pane name="timeline" tab="时间线">
-        <div class="bible-subtab-header">
-          <n-select v-model:value="subTab" :options="subTabOptions" size="small" style="width: 140px" />
-        </div>
         <n-scrollbar class="bible-scroll">
-          <div v-if="subTab === 'editor'" class="bible-form">
+          <div class="bible-form">
             <n-card size="small" class="bible-card bible-card-last" :bordered="false" :segmented="{ content: true, footer: false }">
           <template #header>
             <div class="bcard-head">
@@ -242,18 +221,32 @@
           />
         </n-card>
           </div>
-          <div v-else class="bible-json">
-            <n-input
-              v-model:value="jsonRaw"
-              type="textarea"
-              :autosize="{ minRows: 20 }"
-              placeholder="JSON 格式"
-              class="bible-json-input"
-            />
-          </div>
         </n-scrollbar>
+        <div class="bible-footer">
+          <n-space :size="8">
+            <n-button size="small" type="primary" :loading="saving" @click="save">保存</n-button>
+            <n-button size="small" @click="openJsonModal">JSON 编辑器</n-button>
+          </n-space>
+        </div>
       </n-tab-pane>
     </n-tabs>
+
+    <!-- JSON 编辑器弹窗 -->
+    <n-modal v-model:show="showJsonModal" preset="card" title="JSON 编辑器" style="width: 800px; max-width: 90vw">
+      <n-space vertical :size="12">
+        <n-input
+          v-model:value="jsonRaw"
+          type="textarea"
+          :rows="20"
+          placeholder="JSON 格式"
+          class="bible-json-input"
+        />
+        <n-space :size="8">
+          <n-button @click="formatJson">格式化</n-button>
+          <n-button type="primary" :loading="saving" @click="saveFromJson">保存</n-button>
+        </n-space>
+      </n-space>
+    </n-modal>
   </div>
 </template>
 
@@ -289,14 +282,9 @@ const emptyState = () => ({
 const state = ref(emptyState())
 const jsonRaw = ref('')
 const mainTab = ref<'style' | 'characters' | 'locations' | 'timeline'>('style')
-const subTab = ref<'editor' | 'json'>('editor')
+const showJsonModal = ref(false)
 const saving = ref(false)
 const generating = ref(false)
-
-const subTabOptions = [
-  { label: '可视化编辑', value: 'editor' },
-  { label: 'JSON', value: 'json' }
-]
 
 const stats = computed(() => {
   const namedChars = state.value.characters.filter(c => (c.name || '').trim()).length
@@ -415,25 +403,32 @@ const load = async () => {
 const save = async () => {
   saving.value = true
   try {
-    let payload: Record<string, unknown>
-    if (subTab.value === 'json') {
-      payload = JSON.parse(jsonRaw.value)
-    } else {
-      payload = {
-        characters: state.value.characters.filter(c => (c.name || '').trim()),
-        locations: state.value.locations.filter(l => (l.name || '').trim()),
-        timeline_notes: state.value.timeline_notes.map(s => String(s || '').trim()).filter(Boolean),
-        style_notes: state.value.style_notes,
-      }
+    const payload = {
+      characters: state.value.characters.filter(c => (c.name || '').trim()),
+      locations: state.value.locations.filter(l => (l.name || '').trim()),
+      timeline_notes: state.value.timeline_notes.map(s => String(s || '').trim()).filter(Boolean),
+      style_notes: state.value.style_notes,
     }
     const apiData = toApiFormat(payload)
     await bibleApi.updateBible(props.slug, apiData)
     message.success('设定已保存')
-    if (subTab.value === 'json') {
-      await load()
-    } else {
-      syncJsonFromState()
-    }
+    syncJsonFromState()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+const saveFromJson = async () => {
+  saving.value = true
+  try {
+    const payload = JSON.parse(jsonRaw.value)
+    const apiData = toApiFormat(payload)
+    await bibleApi.updateBible(props.slug, apiData)
+    message.success('设定已保存')
+    await load()
+    showJsonModal.value = false
   } catch (e: any) {
     if (e instanceof SyntaxError) {
       message.error('JSON 格式错误')
@@ -442,6 +437,20 @@ const save = async () => {
     }
   } finally {
     saving.value = false
+  }
+}
+
+const openJsonModal = () => {
+  syncJsonFromState()
+  showJsonModal.value = true
+}
+
+const formatJson = () => {
+  try {
+    const parsed = JSON.parse(jsonRaw.value)
+    jsonRaw.value = JSON.stringify(parsed, null, 2)
+  } catch (e) {
+    message.error('JSON 格式错误，无法格式化')
   }
 }
 
@@ -470,10 +479,6 @@ const addLoc = () => {
 const removeLoc = (i: number) => {
   state.value.locations.splice(i, 1)
 }
-
-watch(subTab, v => {
-  if (v === 'json') syncJsonFromState()
-})
 
 watch(
   () => props.slug,
@@ -640,6 +645,8 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   padding-left: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .bible-tabs :deep(.n-tabs-nav) {
@@ -647,17 +654,26 @@ onMounted(() => {
 }
 
 .bible-tabs :deep(.n-tabs-pane-wrapper) {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
-.bible-subtab-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  background: #fafbfc;
+.bible-tabs :deep(.n-tab-pane) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .bible-scroll {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.bible-footer {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  background: #fafbfc;
 }
 
 .bible-form {
@@ -665,11 +681,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.bible-json {
-  padding: 16px;
-  height: 100%;
 }
 
 .bible-json-input :deep(textarea) {
