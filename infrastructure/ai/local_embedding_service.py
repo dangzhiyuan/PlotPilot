@@ -2,6 +2,8 @@
 from typing import List
 import logging
 import torch
+import os
+from pathlib import Path
 from domain.ai.services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
@@ -12,18 +14,34 @@ class LocalEmbeddingService(EmbeddingService):
 
     使用 BAAI/bge-small-zh-v1.5 模型进行中文文本向量化。
     支持 GPU 加速。
+    优先使用本地模型路径，避免从 HuggingFace 下载。
     """
 
-    def __init__(self, model_name: str = "BAAI/bge-small-zh-v1.5", use_gpu: bool = True):
+    def __init__(self, model_name: str = None, use_gpu: bool = True):
         """
         初始化本地 Embedding 服务
 
         Args:
-            model_name: 模型名称或本地路径
+            model_name: 模型名称或本地路径（如果为 None，从环境变量读取）
             use_gpu: 是否使用 GPU 加速（默认 True，自动检测）
         """
         try:
             from sentence_transformers import SentenceTransformer
+
+            # 优先使用环境变量配置的本地路径
+            if model_name is None:
+                model_path = os.getenv("EMBEDDING_MODEL_PATH", "./.models/bge-small-zh-v1.5")
+                # 转换为绝对路径
+                model_path = str(Path(model_path).resolve())
+
+                # 检查本地路径是否存在
+                if os.path.exists(model_path):
+                    model_name = model_path
+                    logger.info(f"Using local model path: {model_path}")
+                else:
+                    # 如果本地路径不存在，使用模型名称（会从 HuggingFace 下载）
+                    model_name = "BAAI/bge-small-zh-v1.5"
+                    logger.warning(f"Local model path not found: {model_path}, will download from HuggingFace")
 
             # 检测设备
             if use_gpu and torch.cuda.is_available():
@@ -33,7 +51,12 @@ class LocalEmbeddingService(EmbeddingService):
                 device = 'cpu'
                 logger.info("Using CPU")
 
-            self.model = SentenceTransformer(model_name, device=device)
+            # 加载模型（禁用在线检查以避免网络问题）
+            self.model = SentenceTransformer(
+                model_name,
+                device=device,
+                trust_remote_code=True  # 信任本地代码
+            )
             self._dimension = self.model.get_sentence_embedding_dimension()
             self.device = device
 

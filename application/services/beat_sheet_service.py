@@ -90,22 +90,239 @@ class BeatSheetService:
     async def _retrieve_relevant_context(
         self,
         chapter_id: str,
-        outline: str
+        outline: str,
+        max_tokens: int = 3000
     ) -> Dict:
-        """混合检索策略：强制包含 + 向量检索
+        """混合检索策略：强制包含 + 向量检索 + 智能去重 + tokens 控制
 
-        Phase 1.1 简化版：只实现基础功能
+        Phase 1.2 完整版：
+        1. 强制包含：主要人物、活跃故事线、前置章节状态
+        2. 向量检索：相关伏笔、地点、时间线事件
+        3. 智能去重：避免重复信息
+        4. Tokens 控制：限制上下文总长度
+
+        Args:
+            chapter_id: 章节 ID
+            outline: 章节大纲
+            max_tokens: 最大 tokens 数（粗略估算：1 token ≈ 1.5 字符）
+
+        Returns:
+            检索到的上下文字典
         """
-        context = {}
+        context = {
+            "characters": [],
+            "storylines": [],
+            "previous_chapter": None,
+            "foreshadowings": [],
+            "locations": [],
+            "timeline_events": []
+        }
+
+        # 获取章节信息
+        from domain.novel.value_objects.chapter_id import ChapterId
+        chapter = self.chapter_repo.get_by_id(ChapterId(chapter_id))
+        if not chapter:
+            logger.warning(f"Chapter {chapter_id} not found")
+            return context
+
+        novel_id = chapter.novel_id
+        chapter_number = chapter.number
 
         # === 第一层：强制包含（Must-Have） ===
-        # TODO: 实现获取主要人物和活跃故事线
-        # 当前简化版：暂时跳过
+
+        # 1. 获取主要人物（从 Cast）
+        try:
+            from infrastructure.persistence.database.sqlite_cast_repository import SqliteCastRepository
+            from infrastructure.persistence.database.connection import get_database
+
+            cast_repo = SqliteCastRepository(get_database())
+            cast = cast_repo.get_by_novel_id(novel_id)
+
+            if cast and cast.characters:
+                # 只包含主要角色（前 5 个）
+                main_characters = cast.characters[:5]
+                context["characters"] = [
+                    {
+                        "name": char.name,
+                        "role": getattr(char, "role", "未知"),
+                        "brief": getattr(char, "personality", "")[:100]  # 简短描述
+                    }
+                    for char in main_characters
+                ]
+                logger.info(f"Retrieved {len(context['characters'])} main characters")
+        except Exception as e:
+            logger.warning(f"Failed to retrieve characters: {e}")
+
+        # 2. 获取活跃故事线
+        try:
+            all_storylines = self.storyline_repo.get_by_novel_id(novel_id)
+            # 过滤活跃的故事线（有 last_active_chapter 且在当前章节附近）
+            active_storylines = [
+                sl for sl in all_storylines
+                if hasattr(sl, 'last_active_chapter') and sl.last_active_chapter
+                and abs(sl.last_active_chapter - chapter_number) <= 5
+            ]
+            if active_storylines:
+                context["storylines"] = [
+                    {
+                        "name": sl.name,
+                        "type": sl.storyline_type.value if hasattr(sl.storyline_type, 'value') else str(sl.storyline_type),
+                        "progress": getattr(sl, "progress_summary", "")[:150]
+                    }
+                    for sl in active_storylines[:3]  # 最多 3 条
+                ]
+                logger.info(f"Retrieved {len(context['storylines'])} active storylines")
+        except Exception as e:
+            logger.warning(f"Failed to retrieve storylines: {e}")
+
+        # 3. 获取前置章节状态（如果有）
+        if chapter_number > 1:
+            try:
+                prev_chapter = self.chapter_repo.get_by_number(novel_id, chapter_number - 1)
+                if prev_chapter and hasattr(prev_chapter, 'state') and prev_chapter.state:
+                    context["previous_chapter"] = {
+                        "number": prev_chapter.chapter_number,
+                        "title": prev_chapter.title,
+                        "summary": getattr(prev_chapter.state, "summary", "")[:200]
+                    }
+                    logger.info(f"Retrieved previous chapter state")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve previous chapter: {e}")
 
         # === 第二层：向量检索（Nice-to-Have） ===
-        # TODO: 实现向量检索（需要先将 outline 转换为向量）
-        # 当前简化版：暂时跳过向量检索
-        context["foreshadowings"] = []
+
+        # 4. 向量检索相关伏笔（暂时跳过，需要集成 embedding_service）
+        if self.vector_store and outline:
+            try:
+                # 注意：当前 ChromaDBVectorStore 需要 embedding_service 来转换文本
+                # 这里暂时跳过向量检索，等待后续集成 embedding_service
+                logger.info("Vector search for foreshadowings skipped (needs embedding service integration)")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve foreshadowings: {e}")
+
+        # 5. 向量检索相关地点（暂时跳过）
+        if self.bible_service and self.vector_store and outline:
+            try:
+                logger.info("Vector search for locations skipped (needs embedding service integration)")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve locations: {e}")
+
+        # 6. 获取相关时间线事件
+        try:
+            from infrastructure.persistence.database.sqlite_timeline_repository import SqliteTimelineRepository
+            from infrastructure.persistence.database.connection import get_database
+
+            timeline_repo = SqliteTimelineRepository(get_database())
+            timeline_registry = timeline_repo.get_by_novel_id(novel_id)
+
+            if timeline_registry and timeline_registry.events:
+                # 获取当前章节之前的最近 5 个事件
+                recent_events = [
+                    e for e in timeline_registry.events
+                    if e.chapter_number < chapter_number
+                ][-5:]
+
+                context["timeline_events"] = [
+                    {
+                        "description": event.description,
+                        "time_type": event.time_type,
+                        "chapter": event.chapter_number
+                    }
+                    for event in recent_events
+                ]
+
+                if context["timeline_events"]:
+                    logger.info(f"Retrieved {len(context['timeline_events'])} timeline events")
+        except Exception as e:
+            logger.warning(f"Failed to retrieve timeline events: {e}")
+
+        # === 第三层：智能去重和 Tokens 控制 ===
+        context = self._deduplicate_and_limit_tokens(context, max_tokens)
+
+        return context
+
+    def _deduplicate_and_limit_tokens(self, context: Dict, max_tokens: int) -> Dict:
+        """智能去重和 tokens 控制
+
+        1. 去重：移除重复的信息
+        2. 优先级排序：Must-Have > Nice-to-Have
+        3. Tokens 控制：粗略估算并截断
+
+        Args:
+            context: 原始上下文
+            max_tokens: 最大 tokens 数
+
+        Returns:
+            处理后的上下文
+        """
+        # 粗略估算：1 token ≈ 1.5 字符（中文）
+        def estimate_tokens(text: str) -> int:
+            return int(len(text) / 1.5)
+
+        def estimate_context_tokens(ctx: Dict) -> int:
+            """估算上下文的 tokens 数"""
+            total = 0
+            total += sum(estimate_tokens(json.dumps(c, ensure_ascii=False)) for c in ctx.get("characters", []))
+            total += sum(estimate_tokens(json.dumps(s, ensure_ascii=False)) for s in ctx.get("storylines", []))
+            if ctx.get("previous_chapter"):
+                total += estimate_tokens(json.dumps(ctx["previous_chapter"], ensure_ascii=False))
+            total += sum(estimate_tokens(json.dumps(f, ensure_ascii=False)) for f in ctx.get("foreshadowings", []))
+            total += sum(estimate_tokens(json.dumps(l, ensure_ascii=False)) for l in ctx.get("locations", []))
+            total += sum(estimate_tokens(json.dumps(e, ensure_ascii=False)) for e in ctx.get("timeline_events", []))
+            return total
+
+        # 去重：移除描述相同的项
+        def deduplicate_list(items: List[Dict], key: str = "description") -> List[Dict]:
+            seen = set()
+            result = []
+            for item in items:
+                value = item.get(key, "")
+                if value and value not in seen:
+                    seen.add(value)
+                    result.append(item)
+            return result
+
+        context["foreshadowings"] = deduplicate_list(context.get("foreshadowings", []), "description")
+        context["locations"] = deduplicate_list(context.get("locations", []), "name")
+        context["timeline_events"] = deduplicate_list(context.get("timeline_events", []), "description")
+
+        # Tokens 控制：如果超出限制，按优先级截断
+        current_tokens = estimate_context_tokens(context)
+
+        if current_tokens > max_tokens:
+            logger.warning(f"Context tokens ({current_tokens}) exceeds limit ({max_tokens}), truncating...")
+
+            # 优先级：characters > storylines > previous_chapter > foreshadowings > timeline_events > locations
+            # 逐步削减低优先级内容
+
+            # 1. 削减地点（最低优先级）
+            while current_tokens > max_tokens and context.get("locations"):
+                context["locations"].pop()
+                current_tokens = estimate_context_tokens(context)
+
+            # 2. 削减时间线事件
+            while current_tokens > max_tokens and context.get("timeline_events"):
+                context["timeline_events"].pop()
+                current_tokens = estimate_context_tokens(context)
+
+            # 3. 削减伏笔
+            while current_tokens > max_tokens and context.get("foreshadowings"):
+                context["foreshadowings"].pop()
+                current_tokens = estimate_context_tokens(context)
+
+            # 4. 削减故事线
+            while current_tokens > max_tokens and len(context.get("storylines", [])) > 1:
+                context["storylines"].pop()
+                current_tokens = estimate_context_tokens(context)
+
+            # 5. 截断前置章节摘要
+            if current_tokens > max_tokens and context.get("previous_chapter"):
+                summary = context["previous_chapter"].get("summary", "")
+                if len(summary) > 100:
+                    context["previous_chapter"]["summary"] = summary[:100] + "..."
+                    current_tokens = estimate_context_tokens(context)
+
+            logger.info(f"Context truncated to {current_tokens} tokens")
 
         return context
 
@@ -114,7 +331,7 @@ class BeatSheetService:
         outline: str,
         context: Dict
     ) -> Prompt:
-        """构建节拍表生成提示词"""
+        """构建节拍表生成提示词（使用增强的上下文）"""
 
         system_prompt = """你是一位专业的小说编剧，擅长将章节大纲拆解为具体的场景（Scene）。
 
@@ -144,6 +361,7 @@ class BeatSheetService:
 - 每个场景聚焦一个明确目标，避免贪多
 - POV 角色应该是章节中的主要角色
 - 预估字数总和应该在 2000-4000 字之间
+- 充分利用提供的上下文信息（人物、故事线、伏笔、地点、时间线）
 """
 
         # 构建用户提示词
@@ -152,13 +370,43 @@ class BeatSheetService:
 
 """
 
-        # 添加相关伏笔（如果有）
-        if context.get("foreshadowings"):
-            user_prompt += "\n相关伏笔（可以在场景中呼应）：\n"
-            for foreshadowing in context["foreshadowings"][:5]:  # 最多显示 5 条
-                user_prompt += f"- {foreshadowing.get('description', 'N/A')}\n"
+        # 添加主要人物信息
+        if context.get("characters"):
+            user_prompt += "\n=== 主要人物 ===\n"
+            for char in context["characters"]:
+                user_prompt += f"- {char['name']} ({char['role']}): {char['brief']}\n"
 
-        user_prompt += "\n请生成场景列表（JSON 格式）："
+        # 添加活跃故事线
+        if context.get("storylines"):
+            user_prompt += "\n=== 活跃故事线 ===\n"
+            for sl in context["storylines"]:
+                user_prompt += f"- {sl['name']} ({sl['type']}): {sl['progress']}\n"
+
+        # 添加前置章节状态
+        if context.get("previous_chapter"):
+            prev = context["previous_chapter"]
+            user_prompt += f"\n=== 前一章节 ===\n"
+            user_prompt += f"第 {prev['number']} 章《{prev['title']}》: {prev['summary']}\n"
+
+        # 添加相关伏笔
+        if context.get("foreshadowings"):
+            user_prompt += "\n=== 相关伏笔（可以在场景中呼应） ===\n"
+            for foreshadowing in context["foreshadowings"]:
+                user_prompt += f"- {foreshadowing['description']} (第 {foreshadowing['chapter']} 章)\n"
+
+        # 添加相关地点
+        if context.get("locations"):
+            user_prompt += "\n=== 可用地点 ===\n"
+            for loc in context["locations"]:
+                user_prompt += f"- {loc['name']}: {loc['description']}\n"
+
+        # 添加时间线事件
+        if context.get("timeline_events"):
+            user_prompt += "\n=== 时间线（最近事件） ===\n"
+            for event in context["timeline_events"]:
+                user_prompt += f"- 第 {event['chapter']} 章: {event['description']} ({event['time_type']})\n"
+
+        user_prompt += "\n请基于以上信息生成场景列表（JSON 格式）："
 
         return Prompt(
             system=system_prompt,

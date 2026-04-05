@@ -40,7 +40,7 @@ class SqliteChapterRepository(ChapterRepository):
             chapter.number,
             chapter.title,
             chapter.content,
-            '',  # outline 字段留空，Chapter 实体不包含此字段
+            chapter.outline,  # 使用实体的 outline 字段
             status,
             now,
             now
@@ -97,5 +97,6 @@ class SqliteChapterRepository(ChapterRepository):
             number=row['number'],
             title=row['title'],
             content=row['content'],
+            outline=row.get('outline', ''),  # 读取 outline 字段
             status=row['status']
         )

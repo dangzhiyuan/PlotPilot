@@ -24,6 +24,7 @@ class Chapter(BaseEntity):
         number: int,
         title: str,
         content: str = "",
+        outline: str = "",
         status: ChapterStatus = ChapterStatus.DRAFT
     ):
         super().__init__(id)
@@ -31,6 +32,7 @@ class Chapter(BaseEntity):
         self.number = number
         self.title = title
         self._content_text = content  # 直接存储文本，允许空内容
+        self.outline = outline  # 章节大纲
         self.status = status
 
     @property
