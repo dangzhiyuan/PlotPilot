@@ -45,15 +45,28 @@ export interface ContinuePlanResult {
   [key: string]: unknown
 }
 
-/** story_node 结构节点（树形） */
+/** story_node 结构节点（树形，与后端 to_dict / 层级树一致） */
 export interface StoryNode {
   id: string
-  type: 'part' | 'volume' | 'act' | 'chapter'
+  novel_id?: string
+  node_type: 'part' | 'volume' | 'act' | 'chapter'
   title: string
   number?: number
   description?: string
+  outline?: string
   children?: StoryNode[]
+  /** 章节：视角角色 id、时间线等 */
+  pov_character_id?: string | null
+  timeline_start?: string | null
+  timeline_end?: string | null
+  metadata?: Record<string, unknown>
   [key: string]: unknown
+}
+
+/** GET /planning/novels/:id/structure 的 data 载荷 */
+export interface PlanningStructurePayload {
+  novel_id: string
+  nodes: StoryNode[]
 }
 
 // ==================== API ====================
@@ -86,7 +99,9 @@ export const planningApi = {
   // ==================== 查询 ====================
 
   getStructure: (novelId: string) =>
-    apiClient.get<{ success: boolean; data: StoryNode }>(`/planning/novels/${novelId}/structure`) as unknown as Promise<{ success: boolean; data: StoryNode }>,
+    apiClient.get<{ success: boolean; data: PlanningStructurePayload }>(
+      `/planning/novels/${novelId}/structure`
+    ) as unknown as Promise<{ success: boolean; data: PlanningStructurePayload }>,
 
   getActDetail: (actId: string) =>
     apiClient.get<{ success: boolean; data: StoryNode }>(`/planning/acts/${actId}`) as unknown as Promise<{ success: boolean; data: StoryNode }>,
