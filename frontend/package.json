@@ -1,7 +1,8 @@
 {
-  "name": "web-app",
+  "name": "plotpilot",
   "private": true,
-  "version": "0.0.0",
+  "description": "PlotPilot · 墨枢 - 作者的领航员",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
