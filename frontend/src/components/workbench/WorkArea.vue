@@ -106,6 +106,7 @@
 
           <n-tab-pane name="chapter-status" tab="📋 章节状态">
             <ChapterStatusPanel
+              :slug="slug"
               :chapter="currentChapter"
               :read-only="isAssistedReadOnly"
               :last-workflow-result="lastWorkflowResult"

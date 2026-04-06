@@ -57,10 +57,10 @@
               </n-text>
               <n-descriptions :column="1" label-placement="left" size="small" label-style="white-space: nowrap">
                 <n-descriptions-item label="标题">{{ chapterPlan.title || '—' }}</n-descriptions-item>
-                <n-descriptions-item v-if="chapterPlan.outline" label="大纲 / 节拍">
+                <n-descriptions-item v-if="chapterPlan.outline" label="大纲（全文）">
                   <n-text style="font-size: 12px; white-space: pre-wrap">{{ chapterPlan.outline }}</n-text>
                 </n-descriptions-item>
-                <n-descriptions-item v-if="chapterPlan.description" label="摘要">
+                <n-descriptions-item v-if="chapterPlan.description" label="结构树摘要">
                   <n-text style="font-size: 12px; white-space: pre-wrap">{{ chapterPlan.description }}</n-text>
                 </n-descriptions-item>
                 <n-descriptions-item v-if="chapterPlan.pov_character_id" label="视角 POV">
@@ -77,6 +77,55 @@
                 </n-descriptions-item>
               </n-descriptions>
             </n-space>
+          </n-card>
+
+          <n-card
+            v-if="currentChapterNumber && showBeatsCard"
+            title="节拍"
+            size="small"
+            :bordered="true"
+            class="ce-card-beats"
+          >
+            <n-text v-if="beatSourceHint" depth="3" class="ce-card-lead">{{ beatSourceHint }}</n-text>
+            <ol v-if="beatLines.length" class="ce-beat-list">
+              <li v-for="(line, bi) in beatLines" :key="bi">{{ line }}</li>
+            </ol>
+            <n-empty v-else description="暂无节拍；可在叙事知识中为本章填写 beat_sections，或在结构树大纲用多行书写" size="small" />
+          </n-card>
+
+          <n-card
+            v-if="currentChapterNumber && hasSummaryBlock"
+            title="本章总结"
+            size="small"
+            :bordered="true"
+            class="ce-card-summary"
+          >
+            <n-text v-if="summarySourceHint" depth="3" class="ce-card-lead">{{ summarySourceHint }}</n-text>
+            <n-descriptions
+              v-if="knowledgeChapter && (knowledgeChapter.summary || knowledgeChapter.key_events || knowledgeChapter.consistency_note)"
+              :column="1"
+              label-placement="left"
+              size="small"
+            >
+              <n-descriptions-item v-if="knowledgeChapter.summary" label="摘要">
+                <n-text style="font-size: 12px; white-space: pre-wrap">{{ knowledgeChapter.summary }}</n-text>
+              </n-descriptions-item>
+              <n-descriptions-item v-if="knowledgeChapter.key_events" label="关键事件">
+                <n-text style="font-size: 12px; white-space: pre-wrap">{{ knowledgeChapter.key_events }}</n-text>
+              </n-descriptions-item>
+              <n-descriptions-item v-if="knowledgeChapter.consistency_note" label="一致性备注">
+                <n-text style="font-size: 12px; white-space: pre-wrap">{{ knowledgeChapter.consistency_note }}</n-text>
+              </n-descriptions-item>
+            </n-descriptions>
+            <n-text
+              v-else-if="chapterPlan?.description"
+              style="font-size: 12px; white-space: pre-wrap; line-height: 1.55"
+            >
+              {{ chapterPlan.description }}
+            </n-text>
+            <n-text depth="3" class="ce-k-hint">
+              叙事知识来自 <code class="ce-inline-code">GET /novels/{id}/knowledge</code> 中与本章号对应的章节条目。
+            </n-text>
           </n-card>
 
           <n-alert v-else-if="storyNodeNotFound" type="warning" :show-icon="true">
@@ -312,6 +361,8 @@ import { chapterElementApi } from '../../api/chapterElement'
 import type { ChapterElementDTO, ElementType, RelationType, Importance } from '../../api/chapterElement'
 import { planningApi } from '../../api/planning'
 import type { StoryNode } from '../../api/planning'
+import { knowledgeApi } from '../../api/knowledge'
+import type { ChapterSummary } from '../../api/knowledge'
 import type { GenerateChapterWorkflowResponse } from '../../api/workflow'
 import type { AutopilotChapterAudit } from './ChapterStatusPanel.vue'
 import ForeshadowChapterSuggestionsPanel from './ForeshadowChapterSuggestionsPanel.vue'
@@ -346,6 +397,8 @@ const deletingId = ref<string | null>(null)
 const storyNodeId = ref<string | null>(null)
 const storyNodeNotFound = ref(false)
 const chapterPlan = ref<StoryNode | null>(null)
+/** 叙事知识中与本章号对应的章节条目（节拍 / 摘要） */
+const knowledgeChapter = ref<ChapterSummary | null>(null)
 const filterType = ref<ElementType | undefined>(undefined)
 
 const form = ref<{
@@ -408,6 +461,47 @@ const planMoodLine = computed(() => {
   return ''
 })
 
+const beatLines = computed(() => {
+  const k = knowledgeChapter.value
+  if (k?.beat_sections?.length) {
+    return k.beat_sections.map(s => String(s || '').trim()).filter(Boolean)
+  }
+  const ol = chapterPlan.value?.outline?.trim()
+  if (!ol) return []
+  return ol.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0)
+})
+
+const showBeatsCard = computed(() => {
+  if (!props.currentChapterNumber) return false
+  if (beatLines.value.length > 0) return true
+  return !!(chapterPlan.value?.outline?.trim() || knowledgeChapter.value)
+})
+
+const beatSourceHint = computed(() => {
+  if (knowledgeChapter.value?.beat_sections?.length) {
+    return '优先使用叙事知识库中的 beat_sections（章后管线落库后可见）。'
+  }
+  if (chapterPlan.value?.outline?.trim()) {
+    return '当前无 beat_sections 时，将结构树大纲按行拆成节拍列表。'
+  }
+  return ''
+})
+
+const hasSummaryBlock = computed(() => {
+  if (!props.currentChapterNumber) return false
+  const k = knowledgeChapter.value
+  if (k && (k.summary?.trim() || k.key_events?.trim() || k.consistency_note?.trim())) return true
+  return !!chapterPlan.value?.description?.trim()
+})
+
+const summarySourceHint = computed(() => {
+  const k = knowledgeChapter.value
+  if (k && (k.summary?.trim() || k.key_events?.trim() || k.consistency_note?.trim())) {
+    return '以下为叙事知识库中本章条目（与右栏知识库同源）。'
+  }
+  return '暂无叙事知识条目时，展示结构树「摘要」作为参考。'
+})
+
 /** 在结构树森林中按章节号查找 chapter 节点 */
 function findChapterNode(nodes: StoryNode[], num: number): StoryNode | null {
   for (const node of nodes) {
@@ -437,6 +531,18 @@ const resolveStoryNode = async () => {
     }
   } catch {
     storyNodeNotFound.value = true
+  }
+}
+
+async function loadKnowledgeChapter() {
+  knowledgeChapter.value = null
+  if (!props.slug || !props.currentChapterNumber) return
+  try {
+    const k = await knowledgeApi.getKnowledge(props.slug)
+    const row = k.chapters?.find(c => c.chapter_id === props.currentChapterNumber)
+    knowledgeChapter.value = row ?? null
+  } catch {
+    knowledgeChapter.value = null
   }
 }
 
@@ -501,12 +607,14 @@ watch(() => props.slug, async (slug) => {
     chapterPlan.value = null
     storyNodeNotFound.value = false
     await resolveStoryNode()
+    await loadKnowledgeChapter()
     await loadElements()
   }
 })
 
 watch(() => props.currentChapterNumber, async () => {
   await resolveStoryNode()
+  await loadKnowledgeChapter()
   await loadElements()
 }, { immediate: false })
 
@@ -514,11 +622,13 @@ const refreshStore = useWorkbenchRefreshStore()
 const { deskTick } = storeToRefs(refreshStore)
 watch(deskTick, async () => {
   await resolveStoryNode()
+  await loadKnowledgeChapter()
   await loadElements()
 })
 
 onMounted(async () => {
   await resolveStoryNode()
+  await loadKnowledgeChapter()
   await loadElements()
 })
 </script>
@@ -610,5 +720,31 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ce-beat-list {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ce-card-beats .ce-card-lead,
+.ce-card-summary .ce-card-lead {
+  margin-bottom: 8px;
+}
+
+.ce-k-hint {
+  display: block;
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ce-inline-code {
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--n-code-color);
 }
 </style>
