@@ -8,6 +8,14 @@
       <!-- 角色锚点 + 试生成 -->
       <n-card title="角色锚点 · 试生成对话" size="small" :bordered="true">
         <n-space vertical :size="10">
+          <n-alert
+            v-if="characters.length === 0"
+            type="warning"
+            :show-icon="true"
+            style="font-size: 12px"
+          >
+            当前 Bible 中<strong>没有角色</strong>：请打开侧栏「剧本基建」→ Story Bible，添加或生成角色后再回到此处选择。
+          </n-alert>
           <n-space :size="8" wrap align="center">
             <n-select
               v-model:value="selectedCharacterId"

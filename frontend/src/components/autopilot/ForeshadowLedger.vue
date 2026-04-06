@@ -4,7 +4,7 @@
       <div class="ledger-title-block">
         <span class="ledger-title">📖 伏笔雷达</span>
         <n-text depth="3" class="ledger-sub">
-          只读摘要；编辑请用右侧「片场 · 伏笔账本」（数据同源）
+          只读摘要。新增 / 编辑伏笔：侧栏「片场 → 伏笔账本」→「+ 添加伏笔」（与本卡数据同源）。
         </n-text>
       </div>
       <n-space :size="8">
