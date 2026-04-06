@@ -117,6 +117,17 @@
             />
           </n-tab-pane>
 
+          <n-tab-pane name="chapter-content" tab="📄 章节内容">
+            <div class="elements-tab-wrap">
+              <ChapterContentPanel
+                :slug="slug"
+                :current-chapter-number="currentChapter?.number ?? null"
+                :read-only="isAssistedReadOnly"
+                :autopilot-chapter-review="autopilotChapterReview"
+              />
+            </div>
+          </n-tab-pane>
+
           <n-tab-pane name="chapter-elements" tab="🧩 章节元素">
             <div class="elements-tab-wrap">
               <ChapterElementPanel
@@ -450,6 +461,7 @@ import { chapterApi } from '../../api/chapter'
 import { tensionApi } from '../../api/tools'
 import type { TensionDiagnosis } from '../../api/tools'
 import ChapterElementPanel from './ChapterElementPanel.vue'
+import ChapterContentPanel from './ChapterContentPanel.vue'
 import ChapterStatusPanel from './ChapterStatusPanel.vue'
 import AutopilotPanel from '../autopilot/AutopilotPanel.vue'
 import AutopilotDashboard from '../autopilot/AutopilotDashboard.vue'
