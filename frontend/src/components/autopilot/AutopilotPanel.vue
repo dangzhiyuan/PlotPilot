@@ -40,9 +40,28 @@
       </div>
     </div>
 
-    <!-- 熔断警告 -->
-    <n-alert v-if="hasErrors" type="error" :show-icon="true" style="margin: 4px 0; font-size: 12px">
-      连续失败 {{ status.consecutive_error_count }} 次，守护进程可能已熔断
+    <!-- 单本挂起 / 失败计数过高：与监控大盘「熔断保护 → 重置」同源接口 -->
+    <n-alert v-if="needsRecovery" type="error" :show-icon="true" style="margin: 4px 0; font-size: 12px">
+      <div class="recovery-hint">
+        <p v-if="status?.autopilot_status === 'error'">
+          本书已因<strong>连续失败</strong>被标为<strong>异常挂起</strong>（守护进程会停止处理本书）。
+        </p>
+        <p v-else>
+          已连续失败 <strong>{{ status?.consecutive_error_count || 0 }}</strong> 次（达到 3 次会挂起）。
+        </p>
+        <p class="recovery-sub">
+          全局 LLM 熔断在守护进程内，无法在此直接展示。下方按钮与「监控大盘 → 熔断保护 → 重置」相同：清零计数并解除异常，然后可重新点「启动全托管」。
+        </p>
+        <n-button
+          size="small"
+          type="primary"
+          secondary
+          :loading="toggling"
+          @click="clearCircuitBreaker"
+        >
+          解除挂起并清零计数
+        </n-button>
+      </div>
     </n-alert>
 
     <!-- 审阅等待提示 -->
@@ -68,11 +87,18 @@
 
     <!-- 启动配置弹窗 -->
     <n-modal v-model:show="showStartModal" title="自动驾驶配置" preset="dialog" positive-text="启动" @positive-click="start">
-      <n-form>
-        <n-form-item label="本次最多生成章节数（成本控制）">
-          <n-input-number v-model:value="startConfig.max_auto_chapters" :min="1" :max="200" />
-        </n-form-item>
-      </n-form>
+      <n-space vertical :size="12" style="width: 100%">
+        <n-alert type="info" :show-icon="true" style="font-size: 12px">
+          <strong>前置条件</strong>：本机需运行<strong>自动驾驶守护进程</strong>（如
+          <code style="font-size: 11px">python scripts/start_daemon.py</code>
+          ），否则数据库状态不会推进。若本书曾异常挂起，请先点「解除挂起并清零计数」或监控大盘「重置」。
+        </n-alert>
+        <n-form>
+          <n-form-item label="本次最多生成章节数（成本控制）">
+            <n-input-number v-model:value="startConfig.max_auto_chapters" :min="1" :max="200" />
+          </n-form-item>
+        </n-form>
+      </n-space>
     </n-modal>
   </div>
 </template>
@@ -96,10 +122,15 @@ let eventSource = null
 const isRunning  = computed(() => status.value?.autopilot_status === 'running')
 const needsReview = computed(() => status.value?.needs_review === true)
 const isWriting  = computed(() => status.value?.current_stage === 'writing')
-const hasErrors  = computed(() => (status.value?.consecutive_error_count || 0) >= 3)
+/** 需人工解除：异常挂起，或连续失败已达阈值 */
+const needsRecovery = computed(
+  () =>
+    status.value?.autopilot_status === 'error' ||
+    (status.value?.consecutive_error_count || 0) >= 3
+)
 const progressPct = computed(() => status.value?.progress_pct || 0)
 const progressColor = computed(() => {
-  if (hasErrors.value) return '#d03050'
+  if (needsRecovery.value) return '#d03050'
   if (needsReview.value) return '#f0a020'
   return '#18a058'
 })
@@ -203,6 +234,21 @@ async function resume() {
   else { const e = await res.json(); message.error(e.detail || '恢复失败') }
   await fetchStatus()
   toggling.value = false
+}
+
+async function clearCircuitBreaker() {
+  toggling.value = true
+  try {
+    const res = await fetch(`${base()}/circuit-breaker/reset`, { method: 'POST' })
+    if (res.ok) {
+      message.success('已解除挂起并清零失败计数，可重新启动全托管')
+      await fetchStatus()
+    } else {
+      message.error('操作失败，请确认后端已更新并稍后重试')
+    }
+  } finally {
+    toggling.value = false
+  }
 }
 
 onMounted(() => { fetchStatus(); connectSSE() })
@@ -342,5 +388,16 @@ onUnmounted(() => eventSource?.close())
   .ap-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.recovery-hint p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.recovery-sub {
+  font-size: 11px;
+  opacity: 0.95;
+  margin-bottom: 8px !important;
 }
 </style>
