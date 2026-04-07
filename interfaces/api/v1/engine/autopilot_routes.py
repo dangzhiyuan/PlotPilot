@@ -492,10 +492,10 @@ async def autopilot_log_stream(novel_id: str):
 
 @router.get("/{novel_id}/chapter-stream")
 async def autopilot_chapter_stream(novel_id: str):
-    """SSE 实时推送正在写作的章节内容
+    """SSE 实时推送正在写作的章节内容（真正的流式）
 
     推送事件类型：
-    - chapter_content: 当前正在写作的章节内容增量
+    - chapter_content: 增量文字片段
     - chapter_complete: 章节写作完成
     - chapter_start: 开始写新章节
     """
@@ -503,26 +503,28 @@ async def autopilot_chapter_stream(novel_id: str):
     chapter_repo = get_chapter_repository()
 
     async def event_generator():
-        last_chapter_number = None
-        last_content_length = 0
-        last_beat_index = -1
-        heartbeat_counter = 0
+        from application.engine.services.streaming_bus import streaming_bus
 
         # 发送初始连接事件
         init_event = {
             "type": "connected",
-            "message": "章节内容流已连接",
+            "message": "章节内容流已连接（真正的流式）",
             "timestamp": datetime.now().isoformat()
         }
         yield f"data: {json.dumps(init_event, ensure_ascii=False)}\n\n"
 
-        while True:
-            try:
+        # 订阅流式内容
+        queue = streaming_bus.subscribe(novel_id)
+        last_chapter_number = None
+        heartbeat_counter = 0
+
+        try:
+            while True:
+                # 检查自动驾驶状态
                 novel = novel_repo.get_by_id(NovelId(novel_id))
                 if not novel:
                     break
 
-                # 检查是否终止
                 terminal_states = {"stopped", "error", "completed"}
                 if novel.autopilot_status.value in terminal_states:
                     event = {
@@ -533,60 +535,46 @@ async def autopilot_chapter_stream(novel_id: str):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                     break
 
-                # 只在 writing 阶段推送内容
+                # 检测新章节开始
                 if novel.current_stage.value == "writing":
-                    # 获取 draft 章节（正在写作的章节）
                     chapters = chapter_repo.list_by_novel(NovelId(novel_id))
                     _st = lambda c: c.status.value if hasattr(c.status, "value") else c.status
                     drafts = sorted(
                         [c for c in chapters if _st(c) == "draft"],
                         key=lambda c: c.number
                     )
-
-                    current_beat = getattr(novel, "current_beat_index", 0) or 0
-
                     if drafts:
-                        current_chapter = drafts[0]
-                        chapter_number = current_chapter.number
-                        content = current_chapter.content or ""
-                        content_length = len(content)
-
-                        # 检测新章节开始
+                        chapter_number = drafts[0].number
                         if last_chapter_number is not None and chapter_number != last_chapter_number:
                             event = {
                                 "type": "chapter_start",
                                 "message": f"开始写第 {chapter_number} 章",
                                 "timestamp": datetime.now().isoformat(),
-                                "metadata": {
-                                    "chapter_number": chapter_number,
-                                },
+                                "metadata": {"chapter_number": chapter_number},
                             }
                             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                            last_content_length = 0
-
-                        # 检测节拍变更（有新内容产生）
-                        if current_beat != last_beat_index or content_length > last_content_length:
-                            event = {
-                                "type": "chapter_content",
-                                "message": f"第 {chapter_number} 章 · 节拍 {current_beat}",
-                                "timestamp": datetime.now().isoformat(),
-                                "metadata": {
-                                    "chapter_number": chapter_number,
-                                    "content": content,
-                                    "word_count": content_length,
-                                    "beat_index": current_beat,
-                                    "is_increment": content_length > last_content_length,
-                                },
-                            }
-                            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                            last_content_length = content_length
-                            last_beat_index = current_beat
-
+                            streaming_bus.clear(novel_id)  # 清空旧内容
                         last_chapter_number = chapter_number
 
-                # 心跳（每 5 次循环，约 5 秒）
+                # 尝试从队列获取增量文字
+                try:
+                    chunk = await asyncio.wait_for(queue.get(), timeout=0.5)
+                    event = {
+                        "type": "chapter_chunk",
+                        "message": "",
+                        "timestamp": datetime.now().isoformat(),
+                        "metadata": {
+                            "chunk": chunk,
+                            "beat_index": getattr(novel, "current_beat_index", 0) or 0,
+                        },
+                    }
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    pass
+
+                # 心跳
                 heartbeat_counter += 1
-                if heartbeat_counter >= 5:
+                if heartbeat_counter >= 20:
                     heartbeat_event = {
                         "type": "heartbeat",
                         "message": "keepalive",
@@ -595,11 +583,10 @@ async def autopilot_chapter_stream(novel_id: str):
                     yield f"data: {json.dumps(heartbeat_event, ensure_ascii=False)}\n\n"
                     heartbeat_counter = 0
 
-                await asyncio.sleep(1)  # 每秒检查一次
-
-            except Exception as e:
-                logger.error(f"Chapter stream error: {e}")
-                break
+        except Exception as e:
+            logger.error(f"Chapter stream error: {e}")
+        finally:
+            streaming_bus.unsubscribe(novel_id, queue)
 
     return StreamingResponse(
         event_generator(),

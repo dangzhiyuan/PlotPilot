@@ -31,15 +31,15 @@ export const apiClient: ApiClient = axiosInstance as unknown as ApiClient
 // ============================================================================
 
 export interface ChapterStreamEvent {
-  type: 'connected' | 'chapter_start' | 'chapter_content' | 'autopilot_stopped' | 'heartbeat'
+  type: 'connected' | 'chapter_start' | 'chapter_chunk' | 'chapter_content' | 'autopilot_stopped' | 'heartbeat'
   message: string
   timestamp: string
   metadata?: {
     chapter_number?: number
-    content?: string
-    word_count?: number
+    chunk?: string  // 增量文字
     beat_index?: number
-    is_increment?: boolean
+    content?: string  // 完整内容（向后兼容）
+    word_count?: number
   }
 }
 
@@ -53,6 +53,7 @@ export function subscribeChapterStream(
   novelId: string,
   handlers: {
     onChapterStart?: (chapterNumber: number) => void
+    onChapterChunk?: (chunk: string, beatIndex: number) => void
     onChapterContent?: (data: { chapterNumber: number; content: string; wordCount: number; beatIndex: number }) => void
     onAutopilotStopped?: (status: string) => void
     onError?: (error: Error) => void
@@ -92,7 +93,11 @@ export function subscribeChapterStream(
 
               if (event.type === 'chapter_start' && event.metadata?.chapter_number) {
                 handlers.onChapterStart?.(event.metadata.chapter_number)
+              } else if (event.type === 'chapter_chunk' && event.metadata?.chunk) {
+                // 真正的流式：增量文字
+                handlers.onChapterChunk?.(event.metadata.chunk, event.metadata.beat_index || 0)
               } else if (event.type === 'chapter_content' && event.metadata) {
+                // 向后兼容：完整内容
                 handlers.onChapterContent?.({
                   chapterNumber: event.metadata.chapter_number!,
                   content: event.metadata.content || '',

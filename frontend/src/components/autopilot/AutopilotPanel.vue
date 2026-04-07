@@ -426,8 +426,16 @@ function startChapterStream() {
       writingChapterNumber.value = num
       writingContent.value = ''
       writingBeatIndex.value = 0
+      emit('chapter-start', num)
+    },
+    onChapterChunk: (chunk, beatIndex) => {
+      // 真正的流式：增量追加文字
+      writingContent.value += chunk
+      writingBeatIndex.value = beatIndex
+      emit('chapter-chunk', { chunk, beatIndex, content: writingContent.value })
     },
     onChapterContent: (data) => {
+      // 向后兼容：完整内容
       writingContent.value = data.content
       writingChapterNumber.value = data.chapterNumber
       writingBeatIndex.value = data.beatIndex

@@ -891,7 +891,10 @@ class AutopilotDaemon:
     async def _stream_llm_with_stop_watch(
         self, prompt: Prompt, config: GenerationConfig, novel=None
     ) -> str:
-        """与 workflow 共用同一套 Prompt + LLM；novel 传入时并行轮询 DB 是否已停止。"""
+        """与 workflow 共用同一套 Prompt + LLM；novel 传入时并行轮询 DB 是否已停止。
+        
+        流式生成时会实时推送增量文字到 streaming_callback（如果设置）。
+        """
         content = ""
         stop_detected = asyncio.Event()
         watch_task = None
@@ -915,6 +918,11 @@ class AutopilotDaemon:
                 if novel is not None and stop_detected.is_set():
                     break
                 content += chunk
+                
+                # 实时推送增量文字到全局流式队列
+                if novel is not None and chunk:
+                    await self._push_streaming_chunk(novel.novel_id.value, chunk)
+                
                 if novel is not None and stop_detected.is_set():
                     break
         finally:
@@ -930,6 +938,11 @@ class AutopilotDaemon:
             self._merge_autopilot_status_from_db(novel)
 
         return content
+
+    async def _push_streaming_chunk(self, novel_id: str, chunk: str):
+        """推送增量文字到全局流式队列，供 SSE 接口消费"""
+        from application.engine.services.streaming_bus import streaming_bus
+        streaming_bus.publish(novel_id, chunk)
 
     async def _stream_one_beat(
         self, outline, context, beat_prompt, beat, novel=None, voice_anchors: str = ""
