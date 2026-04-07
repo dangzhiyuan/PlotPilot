@@ -38,7 +38,7 @@
         </n-text>
       </div>
 
-      <!-- 实时写作进度（显示字数、速率、光标 + 实时文字） -->
+      <!-- 实时写作进度（显示字数、速率、光标 + 滚动流式文字） -->
       <div v-if="isWritingContent" class="writing-stream-bar">
         <div class="stream-header-line">
           <span class="stream-cursor">▋</span>
@@ -51,8 +51,8 @@
             <span v-if="writingSpeed > 0" class="speed">· {{ writingSpeed }} 字/秒</span>
           </span>
         </div>
-        <div v-if="writingContent" class="stream-content-preview">
-          <pre class="content-text">{{ writingContent }}</pre>
+        <div ref="scrollContainer2" class="stream-content-preview">
+          <pre class="content-text">{{ streamingText }}<span class="cursor-inline">▋</span></pre>
         </div>
       </div>
 
@@ -165,6 +165,11 @@ const latestProgress = ref<ProgressPayload | null>(null)
 const lastWordCount = ref(0)
 const lastTimestamp = ref(0)
 const writingSpeed = ref(0)
+
+// 滚动流式显示：只显示最近的增量文字
+const lastContentLength = ref(0)
+const streamingText = ref('')
+const scrollContainer2 = ref<HTMLElement | null>(null)
 
 const isWritingContent = computed(() => props.writingContent && props.writingContent.length > 0)
 const writingWordCount = computed(() => props.writingContent?.length || 0)
@@ -431,6 +436,8 @@ watch(
     lastWordCount.value = 0
     lastTimestamp.value = 0
     writingSpeed.value = 0
+    lastContentLength.value = 0
+    streamingText.value = ''
     if (eventSource) {
       eventSource.close()
       eventSource = null
@@ -451,10 +458,14 @@ watch(
       lastWordCount.value = 0
       lastTimestamp.value = 0
       writingSpeed.value = 0
+      lastContentLength.value = 0
+      streamingText.value = ''
       return
     }
     const now = Date.now()
     const currentCount = content.length
+
+    // 计算速率
     if (lastTimestamp.value > 0 && lastWordCount.value > 0) {
       const timeDiff = (now - lastTimestamp.value) / 1000 // 秒
       const wordDiff = currentCount - lastWordCount.value
@@ -462,8 +473,32 @@ watch(
         writingSpeed.value = Math.round(wordDiff / timeDiff)
       }
     }
+
+    // 提取新增的文字（流式滚动显示）
+    if (currentCount > lastContentLength.value) {
+      const newChars = content.slice(lastContentLength.value)
+      streamingText.value += newChars
+      lastContentLength.value = currentCount
+
+      // 自动滚动到底部
+      nextTick(() => {
+        if (scrollContainer2.value) {
+          scrollContainer2.value.scrollTop = scrollContainer2.value.scrollHeight
+        }
+      })
+    }
+
     lastWordCount.value = currentCount
     lastTimestamp.value = now
+  }
+)
+
+// 监听章节变化，清空滚动文本
+watch(
+  () => props.writingChapterNumber,
+  () => {
+    streamingText.value = ''
+    lastContentLength.value = 0
   }
 )
 
@@ -592,6 +627,12 @@ onUnmounted(() => {
   line-height: 1.7;
   color: var(--text-color-2);
   font-family: var(--font-mono);
+}
+
+.writing-stream-bar .cursor-inline {
+  color: #18a058;
+  animation: blink 1s step-end infinite;
+  font-size: 13px;
 }
 
 /* 顶部状态栏 */
